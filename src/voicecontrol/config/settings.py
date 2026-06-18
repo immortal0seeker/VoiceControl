@@ -1,0 +1,135 @@
+"""Central configuration for VoiceControl.
+
+All tunable parameters and paths live here. No hardcoded paths or magic
+numbers should appear elsewhere in the codebase.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+
+# --- Paths -----------------------------------------------------------------
+# Project root = three levels up from this file (src/voicecontrol/config/settings.py).
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
+
+AUDIO_FILES_DIR: Path = PROJECT_ROOT / "audio_files"
+RECORDINGS_DIR: Path = AUDIO_FILES_DIR / "recordings"
+TEMP_DIR: Path = AUDIO_FILES_DIR / "temp"
+SAMPLES_DIR: Path = AUDIO_FILES_DIR / "samples"
+
+# Default WAV for manual/debug single-shot scripts (``__main__`` blocks).
+DEFAULT_RECORDING_PATH: Path = RECORDINGS_DIR / "test.wav"
+
+# --- Audio capture ---------------------------------------------------------
+SAMPLE_RATE: int = 16000
+CHANNELS: int = 1
+DTYPE: str = "float32"
+DEFAULT_RECORD_SECONDS: int = 5
+# None = use the system default input device; otherwise a sounddevice index.
+INPUT_DEVICE: int | None = None
+
+# --- Hotkeys ---------------------------------------------------------------
+# Press RECORD_HOTKEY once to start recording, again to stop. QUIT_HOTKEY exits.
+RECORD_HOTKEY: str = "f9"
+QUIT_HOTKEY: str = "esc"
+
+# --- VAD auto-stop ---------------------------------------------------------
+# Speech probability (0-1) above which a frame counts as speech.
+VAD_SPEECH_THRESHOLD: float = 0.5
+# Stop after this much trailing silence once speech has been detected (s).
+VAD_SILENCE_DURATION: float = 3.0
+# Minimum total speech before auto-stop may trigger (s) — avoids early cutoff.
+VAD_MIN_SPEECH_DURATION: float = 0.3
+# Safety caps for the auto-stop capture loop.
+VAD_MAX_RECORD_SECONDS: float = 30.0   # hard stop even if silence never seen
+VAD_START_TIMEOUT: float = 8.0         # give up if no speech starts at all
+VAD_POLL_INTERVAL: float = 0.15        # how often to re-check the buffer (s)
+
+# --- Speech-to-text (faster-whisper) ---------------------------------------
+WHISPER_MODEL_SIZE: str = "small"          # upgrade path: medium -> large-v3
+WHISPER_DEVICE: str = "cuda"               # fallback "cpu"
+WHISPER_COMPUTE_TYPE: str = "float16"      # fallback "int8"
+# Chinese-primary, English also expected; None lets Whisper auto-detect.
+WHISPER_LANGUAGE: str | None = None
+WHISPER_BEAM_SIZE: int = 5
+# Drop non-speech segments before decoding — kills silence/noise hallucinations.
+WHISPER_VAD_FILTER: bool = True
+# Don't feed prior text back in — avoids repetition/hallucination loops.
+WHISPER_CONDITION_ON_PREVIOUS_TEXT: bool = False
+
+# CPU fallback values, applied when CUDA is unavailable.
+WHISPER_CPU_DEVICE: str = "cpu"
+WHISPER_CPU_COMPUTE_TYPE: str = "int8"
+
+# --- Executor / desktop automation -----------------------------------------
+# Substring (case-insensitive) used to locate the target app window.
+CODEX_WINDOW_TITLE: str = "Codex"
+# Press Enter after pasting to submit the prompt.
+SEND_PROMPT_AUTO_ENTER: bool = True
+# Delays (seconds) around desktop actions — keep small but non-zero (AGENTS §6).
+FOCUS_SETTLE_DELAY: float = 0.3
+PASTE_DELAY: float = 0.15
+ENTER_DELAY: float = 0.1
+
+# Focusing the window alone does not put the caret in the composer, so we
+# click the input box first. Coordinates are relative to the window rect
+# (0.0-1.0). Default targets the bottom-center composer of an active chat.
+CLICK_COMPOSER_BEFORE_PASTE: bool = True
+COMPOSER_CLICK_REL_X: float = 0.5
+COMPOSER_CLICK_REL_Y: float = 0.9
+CLICK_SETTLE_DELAY: float = 0.15
+
+# --- Wake word -------------------------------------------------------------
+# openWakeWord pretrained model name; "hey_jarvis" gates activation (English
+# wake word, but the command you speak afterwards can still be Chinese).
+WAKE_WORD_MODEL: str = "hey_jarvis"
+WAKE_THRESHOLD: float = 0.5
+WAKE_FRAME_SAMPLES: int = 1280          # 80 ms @ 16 kHz — openWakeWord frame
+WAKE_INFERENCE_FRAMEWORK: str = "onnx"  # reuse installed onnxruntime
+WAKE_COOLDOWN: float = 2.0              # ignore re-triggers within this window (s)
+
+# --- Feedback cues ---------------------------------------------------------
+# Audible beeps so you know it heard the wake word / finished (no GUI needed).
+FEEDBACK_ENABLED: bool = True
+FEEDBACK_WAKE_FREQ: int = 880
+FEEDBACK_WAKE_MS: int = 150
+FEEDBACK_DONE_FREQ: int = 1320
+FEEDBACK_DONE_MS: int = 120
+
+# --- Logging / tray daemon -------------------------------------------------
+# The tray app runs without a console, so logs go to a file.
+LOG_DIR: Path = PROJECT_ROOT / "logs"
+LOG_FILE: Path = LOG_DIR / "voicecontrol.log"
+
+# --- Autostart -------------------------------------------------------------
+# Registry value name under HKCU...\Run used to toggle launch-at-logon.
+AUTOSTART_APP_NAME: str = "VoiceControl"
+
+
+def ensure_dirs() -> None:
+    """Create the audio working directories if they don't exist yet."""
+    for directory in (RECORDINGS_DIR, TEMP_DIR, SAMPLES_DIR):
+        directory.mkdir(parents=True, exist_ok=True)
+
+
+def new_recording_path(prefix: str = "command") -> Path:
+    """Return a fresh timestamped WAV path under ``RECORDINGS_DIR``.
+
+    Used by the live pipeline so each utterance is kept (instead of
+    overwriting a single ``test.wav``), aiding later debugging.
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    return RECORDINGS_DIR / f"{prefix}_{timestamp}.wav"
+
+
+if __name__ == "__main__":
+    ensure_dirs()
+    print(f"PROJECT_ROOT          = {PROJECT_ROOT}")
+    print(f"RECORDINGS_DIR        = {RECORDINGS_DIR}")
+    print(f"DEFAULT_RECORDING_PATH= {DEFAULT_RECORDING_PATH}")
+    print(f"SAMPLE_RATE           = {SAMPLE_RATE}")
+    print(f"CHANNELS              = {CHANNELS}")
+    print(f"DEFAULT_RECORD_SECONDS= {DEFAULT_RECORD_SECONDS}")
+    print(f"WHISPER_MODEL_SIZE    = {WHISPER_MODEL_SIZE}")
+    print(f"WHISPER_DEVICE        = {WHISPER_DEVICE} ({WHISPER_COMPUTE_TYPE})")

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voicecontrol"
+version = "0.1.0"
+description = "Voice-driven AI desktop assistant for Windows 11 (local, offline STT)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy==2.4.6",
+    "sounddevice==0.5.5",
+    "soundfile==0.14.0",
+    "faster-whisper>=1.1.0",
+    "keyboard==0.13.5",
+    "pyperclip==1.11.0",
+    "pywin32==312",
+    "openwakeword==0.6.0",
+    "pystray==0.19.5",
+    "Pillow==12.2.0",
+]
+
+[project.scripts]
+voicecontrol = "voicecontrol.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

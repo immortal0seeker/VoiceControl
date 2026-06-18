@@ -1,0 +1,19 @@
+# audio capture & STT
+numpy==2.4.6
+sounddevice==0.5.5
+soundfile==0.14.0
+faster-whisper>=1.1.0
+
+# hotkey trigger
+keyboard==0.13.5
+
+# desktop executor (focus window + clipboard paste)
+pyperclip==1.11.0
+pywin32==312
+
+# VAD auto-stop reuses faster-whisper's bundled Silero ONNX (no new dep)
+
+# wake word + system tray daemon
+openwakeword==0.6.0
+pystray==0.19.5
+Pillow==12.2.0
