@@ -105,6 +105,7 @@ VoiceControl/
 │   └── utils/                  feedback (beeps), autostart (HKCU Run toggle)
 ├── requirements.txt
 ├── README.md
+├── README_EN.md
 ├── AGENTS.md
 └── AGENTS_CN.md
 ```
