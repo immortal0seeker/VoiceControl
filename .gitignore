@@ -44,5 +44,6 @@ logs/
 # Local-only dev notes (not published)
 PROGRESS.md
 
+.trae/
 .codegraph/
 ZReading/
