@@ -130,6 +130,8 @@ def run_wake_foreground(orchestrator: VoiceOrchestrator) -> None:
 
 def main() -> int:
     _force_utf8_stdout()
+    # Foreground CLI mode: logging goes to the console (stderr) only, not to LOG_DIR.
+    # Background tray mode writes logs to a daily file; see tray_app._configure_logging().
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     send_enabled = "--no-send" not in sys.argv

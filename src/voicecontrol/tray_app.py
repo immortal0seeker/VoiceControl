@@ -32,11 +32,13 @@ _STAGE_TITLES = {
 
 
 def _configure_logging() -> None:
+    # Background (tray) mode: logs go to a daily file under LOG_DIR (no console with pythonw).
+    # Foreground CLI (main.py) logs to the console instead; see main.main().
     settings.LOG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.FileHandler(settings.LOG_FILE, encoding="utf-8")],
+        handlers=[logging.FileHandler(settings.log_file_path(), encoding="utf-8")],
     )
 
 

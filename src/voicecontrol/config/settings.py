@@ -98,9 +98,15 @@ FEEDBACK_DONE_FREQ: int = 1320
 FEEDBACK_DONE_MS: int = 120
 
 # --- Logging / tray daemon -------------------------------------------------
-# The tray app runs without a console, so logs go to a file.
+# Background (tray) mode: one log file per day under LOG_DIR (pythonw has no console).
+# Foreground CLI (main.py) logs to the console only; it does not use log_file_path().
 LOG_DIR: Path = PROJECT_ROOT / "logs"
-LOG_FILE: Path = LOG_DIR / "voicecontrol.log"
+
+
+def log_file_path() -> Path:
+    """Return today's log file path (one file per calendar day, append on restart)."""
+    day = datetime.now().strftime("%Y%m%d")
+    return LOG_DIR / f"{day}_voicecontrol.log"
 
 # --- Autostart -------------------------------------------------------------
 # Registry value name under HKCU...\Run used to toggle launch-at-logon.
