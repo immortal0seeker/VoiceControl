@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from voicecontrol.config.manager import load_config
+
 # --- Paths -----------------------------------------------------------------
 # Project root = three levels up from this file (src/voicecontrol/config/settings.py).
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
@@ -42,7 +44,7 @@ VAD_SILENCE_DURATION: float = 3.0
 # Minimum total speech before auto-stop may trigger (s) — avoids early cutoff.
 VAD_MIN_SPEECH_DURATION: float = 0.3
 # Safety caps for the auto-stop capture loop.
-VAD_MAX_RECORD_SECONDS: float = 30.0   # hard stop even if silence never seen
+VAD_MAX_RECORD_SECONDS: float = 300.0   # hard stop even if silence never seen
 VAD_START_TIMEOUT: float = 8.0         # give up if no speech starts at all
 VAD_POLL_INTERVAL: float = 0.15        # how often to re-check the buffer (s)
 
@@ -111,6 +113,52 @@ def log_file_path() -> Path:
 # --- Autostart -------------------------------------------------------------
 # Registry value name under HKCU...\Run used to toggle launch-at-logon.
 AUTOSTART_APP_NAME: str = "VoiceControl"
+
+
+_USER_CONFIG = load_config(PROJECT_ROOT / "config.json")
+
+_AUDIO_CONFIG = _USER_CONFIG["audio"]
+INPUT_DEVICE = _AUDIO_CONFIG["input_device"]
+
+_HOTKEY_CONFIG = _USER_CONFIG["hotkeys"]
+RECORD_HOTKEY = _HOTKEY_CONFIG["record_hotkey"]
+QUIT_HOTKEY = _HOTKEY_CONFIG["quit_hotkey"]
+
+_VAD_CONFIG = _USER_CONFIG["vad"]
+VAD_SPEECH_THRESHOLD = _VAD_CONFIG["speech_threshold"]
+VAD_SILENCE_DURATION = _VAD_CONFIG["silence_duration"]
+VAD_MIN_SPEECH_DURATION = _VAD_CONFIG["min_speech_duration"]
+VAD_MAX_RECORD_SECONDS = _VAD_CONFIG["max_record_seconds"]
+VAD_START_TIMEOUT = _VAD_CONFIG["start_timeout"]
+VAD_POLL_INTERVAL = _VAD_CONFIG["poll_interval"]
+
+_STT_CONFIG = _USER_CONFIG["stt"]
+WHISPER_MODEL_SIZE = _STT_CONFIG["whisper_model_size"]
+WHISPER_DEVICE = _STT_CONFIG["whisper_device"]
+WHISPER_COMPUTE_TYPE = _STT_CONFIG["whisper_compute_type"]
+WHISPER_LANGUAGE = _STT_CONFIG["whisper_language"]
+WHISPER_BEAM_SIZE = _STT_CONFIG["whisper_beam_size"]
+WHISPER_VAD_FILTER = _STT_CONFIG["whisper_vad_filter"]
+WHISPER_CONDITION_ON_PREVIOUS_TEXT = _STT_CONFIG["whisper_condition_on_previous_text"]
+
+_EXECUTOR_CONFIG = _USER_CONFIG["executor"]
+CODEX_WINDOW_TITLE = _EXECUTOR_CONFIG["codex_window_title"]
+SEND_PROMPT_AUTO_ENTER = _EXECUTOR_CONFIG["send_prompt_auto_enter"]
+CLICK_COMPOSER_BEFORE_PASTE = _EXECUTOR_CONFIG["click_composer_before_paste"]
+COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["composer_click_rel_x"]
+COMPOSER_CLICK_REL_Y = _EXECUTOR_CONFIG["composer_click_rel_y"]
+
+_WAKE_WORD_CONFIG = _USER_CONFIG["wake_word"]
+WAKE_WORD_MODEL = _WAKE_WORD_CONFIG["model"]
+WAKE_THRESHOLD = _WAKE_WORD_CONFIG["threshold"]
+WAKE_COOLDOWN = _WAKE_WORD_CONFIG["cooldown"]
+
+_FEEDBACK_CONFIG = _USER_CONFIG["feedback"]
+FEEDBACK_ENABLED = _FEEDBACK_CONFIG["enabled"]
+FEEDBACK_WAKE_FREQ = _FEEDBACK_CONFIG["wake_freq"]
+FEEDBACK_WAKE_MS = _FEEDBACK_CONFIG["wake_ms"]
+FEEDBACK_DONE_FREQ = _FEEDBACK_CONFIG["done_freq"]
+FEEDBACK_DONE_MS = _FEEDBACK_CONFIG["done_ms"]
 
 
 def ensure_dirs() -> None:

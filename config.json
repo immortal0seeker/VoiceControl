@@ -1,0 +1,45 @@
+{
+  "audio": {
+    "input_device": null
+  },
+  "stt": {
+    "whisper_model_size": "small",
+    "whisper_device": "cuda",
+    "whisper_compute_type": "float16",
+    "whisper_language": null,
+    "whisper_beam_size": 5,
+    "whisper_vad_filter": true,
+    "whisper_condition_on_previous_text": false
+  },
+  "vad": {
+    "speech_threshold": 0.5,
+    "silence_duration": 3.0,
+    "min_speech_duration": 0.3,
+    "max_record_seconds": 300.0,
+    "start_timeout": 8.0,
+    "poll_interval": 0.15
+  },
+  "executor": {
+    "codex_window_title": "Codex",
+    "send_prompt_auto_enter": true,
+    "click_composer_before_paste": true,
+    "composer_click_rel_x": 0.5,
+    "composer_click_rel_y": 0.9
+  },
+  "wake_word": {
+    "model": "hey_jarvis",
+    "threshold": 0.5,
+    "cooldown": 2.0
+  },
+  "feedback": {
+    "enabled": true,
+    "wake_freq": 880,
+    "wake_ms": 150,
+    "done_freq": 1320,
+    "done_ms": 120
+  },
+  "hotkeys": {
+    "record_hotkey": "f9",
+    "quit_hotkey": "esc"
+  }
+}
