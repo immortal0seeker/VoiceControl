@@ -10,15 +10,19 @@ Service).
 from __future__ import annotations
 
 import logging
+import subprocess
+import sys
 import threading
+from typing import TYPE_CHECKING
 
 from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
 
 from voicecontrol.config import settings
-from voicecontrol.pipeline.orchestrator import PipelineResult, VoiceOrchestrator
 from voicecontrol.utils import autostart
-from voicecontrol.wake_word.detector import WakeWordDetector
+
+if TYPE_CHECKING:
+    from voicecontrol.pipeline.orchestrator import PipelineResult
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,14 @@ def _make_icon_image() -> Image.Image:
     return image
 
 
+def open_settings_window() -> None:
+    """Open the settings UI in a separate Python process."""
+    subprocess.Popen(
+        [sys.executable, "-m", "voicecontrol.ui.settings_app"],
+        close_fds=True,
+    )
+
+
 class TrayApp:
     """Owns the tray icon, the worker thread, and shared control flags."""
 
@@ -65,6 +77,7 @@ class TrayApp:
             title="VoiceControl — 加载中…",
             menu=Menu(
                 MenuItem(self._pause_label, self._on_toggle_pause),
+                MenuItem("打开设置", self._on_open_settings),
                 MenuItem(
                     "开机自启",
                     self._on_toggle_autostart,
@@ -88,6 +101,12 @@ class TrayApp:
             self._icon.title = "VoiceControl — 已暂停"
         self._icon.update_menu()
 
+    def _on_open_settings(self, _icon: Icon, _item: object) -> None:
+        try:
+            open_settings_window()
+        except OSError:
+            logger.exception("Failed to open settings UI.")
+
     def _on_toggle_autostart(self, _icon: Icon, _item: object) -> None:
         enabled = autostart.toggle()
         logger.info("Autostart toggled -> %s", enabled)
@@ -104,6 +123,9 @@ class TrayApp:
 
     def _worker(self) -> None:
         try:
+            from voicecontrol.pipeline.orchestrator import VoiceOrchestrator
+            from voicecontrol.wake_word.detector import WakeWordDetector
+
             orchestrator = VoiceOrchestrator()
             orchestrator.load()
             detector = WakeWordDetector()

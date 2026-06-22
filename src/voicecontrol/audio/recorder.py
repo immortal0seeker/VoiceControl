@@ -140,12 +140,14 @@ class StreamRecorder:
             self._stream = None
             raise RecordingError(f"Failed to open input stream: {exc}") from exc
 
-    def snapshot(self) -> np.ndarray:
-        """Return audio captured so far without stopping the stream."""
-        chunks = list(self._chunks)  # copy ref; appends are GIL-atomic
-        if not chunks:
-            return np.empty((0, self.channels), dtype=settings.DTYPE)
-        return np.concatenate(chunks, axis=0)
+    # Early VAD read the full buffer each poll; replaced by read_new(). Kept commented
+    # in case a one-shot "audio so far" debug helper is needed again.
+    # def snapshot(self) -> np.ndarray:
+    #     """Return audio captured so far without stopping the stream."""
+    #     chunks = list(self._chunks)  # copy ref; appends are GIL-atomic
+    #     if not chunks:
+    #         return np.empty((0, self.channels), dtype=settings.DTYPE)
+    #     return np.concatenate(chunks, axis=0)
 
     def read_new(self) -> np.ndarray:
         """Return only samples captured since the previous ``read_new`` call.

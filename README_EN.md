@@ -35,6 +35,14 @@ The first run downloads Whisper and openWakeWord models; an internet connection 
 
 ## Usage
 
+### Settings UI
+
+```powershell
+.venv\Scripts\python.exe -m voicecontrol.ui.settings_app
+```
+
+The settings UI only reads and writes the root `config.json`. Restart the tray/listener process after saving changes.
+
 ### Daily use (tray daemon, recommended)
 
 ```powershell

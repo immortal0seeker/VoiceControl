@@ -35,6 +35,14 @@ python -m venv .venv
 
 ## 运行
 
+### 设置页
+
+```powershell
+.venv\Scripts\python.exe -m voicecontrol.ui.settings_app
+```
+
+设置页只读写根目录 `config.json`，保存后重启托盘/监听进程生效。
+
 ### 日常使用（托盘后台，推荐）
 
 ```powershell
