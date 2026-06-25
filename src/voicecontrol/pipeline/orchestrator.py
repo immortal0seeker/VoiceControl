@@ -23,6 +23,7 @@ from voicecontrol.executor.codex_driver import CodexDriver
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.stt.whisper_engine import WhisperEngine
 from voicecontrol.utils import feedback
+from voicecontrol.utils.hotkeys import ManualStopHotkey
 from voicecontrol.vad.silero_vad import EndpointDetector
 from voicecontrol.wake_word.detector import WakeWordDetector
 
@@ -59,6 +60,7 @@ class VoiceOrchestrator:
     def capture_until_silence(
         self,
         detector: EndpointDetector | None = None,
+        stop_event: threading.Event | None = None,
     ) -> np.ndarray:
         """Record from the mic and auto-stop after trailing silence.
 
@@ -76,6 +78,9 @@ class VoiceOrchestrator:
             while True:
                 time.sleep(settings.VAD_POLL_INTERVAL)
                 elapsed = time.monotonic() - start
+                if stop_event is not None and stop_event.is_set():
+                    logger.info("Manual recording stop requested after %.1fs.", elapsed)
+                    break
                 # Feed only newly captured samples; the detector keeps running
                 # totals, so each frame is scored once (O(n) over the utterance).
                 state = detector.update(recorder.read_new().reshape(-1))
@@ -133,6 +138,7 @@ class VoiceOrchestrator:
         stop_event: threading.Event | None = None,
         is_active: Callable[[], bool] | None = None,
         on_event: Callable[[str, PipelineResult | None], None] | None = None,
+        manual_stop_key: str | None = None,
     ) -> None:
         """Always-on loop: wake word → record command → transcribe → send.
 
@@ -166,7 +172,11 @@ class VoiceOrchestrator:
             feedback.wake_cue()
             notify("wake")
 
-            audio = self.capture_until_silence()
+            if manual_stop_key is None:
+                audio = self.capture_until_silence()
+            else:
+                with ManualStopHotkey(manual_stop_key) as recording_stop_event:
+                    audio = self.capture_until_silence(stop_event=recording_stop_event)
             notify("transcribing")
             result = self.process_audio(audio)
             feedback.done_cue()

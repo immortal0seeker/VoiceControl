@@ -44,7 +44,7 @@ VAD_SILENCE_DURATION: float = 3.0
 # Minimum total speech before auto-stop may trigger (s) — avoids early cutoff.
 VAD_MIN_SPEECH_DURATION: float = 0.3
 # Safety caps for the auto-stop capture loop.
-VAD_MAX_RECORD_SECONDS: float = 300.0   # hard stop even if silence never seen
+VAD_MAX_RECORD_SECONDS: float = 180.0   # hard stop even if silence never seen
 VAD_START_TIMEOUT: float = 8.0         # give up if no speech starts at all
 VAD_POLL_INTERVAL: float = 0.15        # how often to re-check the buffer (s)
 

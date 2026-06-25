@@ -57,6 +57,18 @@ def _make_icon_image() -> Image.Image:
     return image
 
 
+def _load_tray_icon_image() -> Image.Image:
+    """Load the shared app icon asset, falling back to a generated badge."""
+    try:
+        from voicecontrol.ui.assets import asset_path
+
+        with Image.open(asset_path("app_icon.png")) as image:
+            return image.convert("RGBA").copy()
+    except OSError:
+        logger.exception("Failed to load tray icon asset; using fallback icon.")
+        return _make_icon_image()
+
+
 def open_settings_window() -> None:
     """Open the settings UI in a separate Python process."""
     subprocess.Popen(
@@ -73,7 +85,7 @@ class TrayApp:
         self._paused = threading.Event()
         self._icon = Icon(
             "VoiceControl",
-            icon=_make_icon_image(),
+            icon=_load_tray_icon_image(),
             title="VoiceControl — 加载中…",
             menu=Menu(
                 MenuItem(self._pause_label, self._on_toggle_pause),
@@ -135,6 +147,7 @@ class TrayApp:
                 stop_event=self._stop_event,
                 is_active=lambda: not self._paused.is_set(),
                 on_event=self._set_stage,
+                manual_stop_key=settings.RECORD_HOTKEY,
             )
         except Exception:
             logger.exception("Wake loop crashed.")

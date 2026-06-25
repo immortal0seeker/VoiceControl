@@ -24,6 +24,7 @@ from voicecontrol.audio.recorder import RecordingError, StreamRecorder, record
 from voicecontrol.config import settings
 from voicecontrol.pipeline.orchestrator import PipelineResult, VoiceOrchestrator
 from voicecontrol.stt.whisper_engine import TranscriptionError
+from voicecontrol.utils.hotkeys import ManualStopHotkey
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +92,9 @@ def run_hotkey_loop(orchestrator: VoiceOrchestrator, use_vad: bool = False) -> N
             return
 
         if use_vad:
-            print("\nRecording... (speak; auto-stops on silence)")
-            audio = orchestrator.capture_until_silence()
+            print(f"\nRecording... (speak; auto-stops on silence, [{record_key}] to stop)")
+            with ManualStopHotkey(record_key) as recording_stop_event:
+                audio = orchestrator.capture_until_silence(stop_event=recording_stop_event)
         else:
             recorder = StreamRecorder()
             recorder.start()
@@ -125,7 +127,11 @@ def run_wake_foreground(orchestrator: VoiceOrchestrator) -> None:
             _print_result(result)
             print(f"\nListening again. Say '{detector.model_name}'...")
 
-    orchestrator.run_wake_loop(detector=detector, on_event=on_event)
+    orchestrator.run_wake_loop(
+        detector=detector,
+        on_event=on_event,
+        manual_stop_key=settings.RECORD_HOTKEY,
+    )
 
 
 def main() -> int:

@@ -32,7 +32,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "speech_threshold": 0.5,
         "silence_duration": 3.0,
         "min_speech_duration": 0.3,
-        "max_record_seconds": 30.0,
+        "max_record_seconds": 180.0,
         "start_timeout": 8.0,
         "poll_interval": 0.15,
     },
