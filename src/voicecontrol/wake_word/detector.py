@@ -16,6 +16,7 @@ import numpy as np
 from openwakeword.model import Model
 
 from voicecontrol.config import settings
+from voicecontrol.wake_word.models import resolve_wake_word_model
 
 logger = logging.getLogger(__name__)
 
@@ -29,11 +30,13 @@ class WakeWordDetector:
         threshold: float = settings.WAKE_THRESHOLD,
         inference_framework: str = settings.WAKE_INFERENCE_FRAMEWORK,
     ) -> None:
-        self.model_name = model_name
+        spec = resolve_wake_word_model(model_name)
+        self.model_name = spec.name
+        self.score_key = spec.score_key
         self.threshold = threshold
-        logger.info("Loading wake word model '%s' (%s)", model_name, inference_framework)
+        logger.info("Loading wake word model '%s' (%s)", self.model_name, inference_framework)
         self._model = Model(
-            wakeword_models=[model_name],
+            wakeword_models=[spec.model_arg],
             inference_framework=inference_framework,
         )
 
@@ -46,7 +49,7 @@ class WakeWordDetector:
         if frame.dtype != np.int16:
             frame = frame.astype(np.int16)
         scores = self._model.predict(frame)
-        return float(scores.get(self.model_name, 0.0))
+        return float(scores.get(self.score_key, 0.0))
 
     def is_wake(self, frame: np.ndarray) -> bool:
         """Convenience: True if the frame's score crosses the threshold."""

@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
 
 from voicecontrol.config import settings
+from voicecontrol.control.commands import START_RECORDING, STOP_RECORDING, read_control_command
 from voicecontrol.utils import autostart
 
 if TYPE_CHECKING:
@@ -83,12 +84,16 @@ class TrayApp:
     def __init__(self) -> None:
         self._stop_event = threading.Event()
         self._paused = threading.Event()
+        self._manual_record_event = threading.Event()
+        self._recording_stop_event = threading.Event()
+        self._is_recording = False
         self._icon = Icon(
             "VoiceControl",
             icon=_load_tray_icon_image(),
             title="VoiceControl — 加载中…",
             menu=Menu(
                 MenuItem(self._pause_label, self._on_toggle_pause),
+                MenuItem(self._recording_label, self._on_toggle_recording),
                 MenuItem("打开设置", self._on_open_settings),
                 MenuItem(
                     "开机自启",
@@ -104,6 +109,9 @@ class TrayApp:
     def _pause_label(self, _item: object) -> str:
         return "恢复监听" if self._paused.is_set() else "暂停监听"
 
+    def _recording_label(self, _item: object) -> str:
+        return "停止录音" if self._is_recording else "开始录音"
+
     def _on_toggle_pause(self, _icon: Icon, _item: object) -> None:
         if self._paused.is_set():
             self._paused.clear()
@@ -112,6 +120,23 @@ class TrayApp:
             self._paused.set()
             self._icon.title = "VoiceControl — 已暂停"
         self._icon.update_menu()
+
+    def _on_toggle_recording(self, _icon: Icon, _item: object) -> None:
+        if self._is_recording:
+            logger.info("Manual recording stop requested from tray.")
+            self._handle_control_command(STOP_RECORDING)
+        else:
+            logger.info("Manual recording requested from tray.")
+            self._handle_control_command(START_RECORDING)
+        self._icon.update_menu()
+
+    def _handle_control_command(self, command: str) -> None:
+        if command == START_RECORDING:
+            self._manual_record_event.set()
+            self._is_recording = True
+        elif command == STOP_RECORDING:
+            self._recording_stop_event.set()
+            self._is_recording = False
 
     def _on_open_settings(self, _icon: Icon, _item: object) -> None:
         try:
@@ -131,6 +156,11 @@ class TrayApp:
 
     # --- worker ------------------------------------------------------------
     def _set_stage(self, stage: str, _result: PipelineResult | None = None) -> None:
+        if stage == "wake":
+            self._is_recording = True
+        elif stage in {"transcribing", "done", "listening", "paused", "stopped", "error"}:
+            self._is_recording = False
+        self._icon.update_menu()
         self._icon.title = f"VoiceControl — {_STAGE_TITLES.get(stage, stage)}"
 
     def _worker(self) -> None:
@@ -148,14 +178,30 @@ class TrayApp:
                 is_active=lambda: not self._paused.is_set(),
                 on_event=self._set_stage,
                 manual_stop_key=settings.RECORD_HOTKEY,
+                manual_record_event=self._manual_record_event,
+                recording_stop_event=self._recording_stop_event,
             )
         except Exception:
             logger.exception("Wake loop crashed.")
             self._icon.title = "VoiceControl — 出错（见日志）"
 
+    def _control_worker(self) -> None:
+        while not self._stop_event.is_set():
+            command = read_control_command()
+            if command == START_RECORDING:
+                logger.info("Manual recording requested from control command.")
+                self._handle_control_command(command)
+                self._icon.update_menu()
+            elif command == STOP_RECORDING:
+                logger.info("Manual recording stop requested from control command.")
+                self._handle_control_command(command)
+                self._icon.update_menu()
+            self._stop_event.wait(timeout=0.25)
+
     def _setup(self, icon: Icon) -> None:
         icon.visible = True
         threading.Thread(target=self._worker, name="wake-loop", daemon=True).start()
+        threading.Thread(target=self._control_worker, name="control-loop", daemon=True).start()
 
     def run(self) -> None:
         self._icon.run(self._setup)

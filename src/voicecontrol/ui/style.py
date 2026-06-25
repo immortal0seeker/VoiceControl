@@ -32,6 +32,35 @@ def apple_style_sheet() -> str:
         font-size: 13px;
         padding-bottom: 18px;
     }
+    QWidget#sidebar {
+        background: #ededf0;
+        border-right: 1px solid #d9d9de;
+    }
+    QLabel#sidebarTitle {
+        color: #1d1d1f;
+        font-size: 18px;
+        font-weight: 700;
+        background: transparent;
+    }
+    QPushButton#navRecording,
+    QPushButton#navSettings {
+        background: transparent;
+        color: #1d1d1f;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 12px;
+        text-align: left;
+        font-weight: 600;
+    }
+    QPushButton#navRecording:hover,
+    QPushButton#navSettings:hover {
+        background: #e1e1e6;
+    }
+    QPushButton#navRecording:checked,
+    QPushButton#navSettings:checked {
+        background: #d8e9ff;
+        color: #0057c2;
+    }
     QLabel#sectionTitle {
         color: #1d1d1f;
         font-size: 17px;

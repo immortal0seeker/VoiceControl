@@ -15,13 +15,16 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from voicecontrol.control.commands import START_RECORDING, STOP_RECORDING, write_control_command
 from voicecontrol.config.manager import ConfigError, load_config, save_config
 from voicecontrol.ui.assets import asset_path
 from voicecontrol.ui.widgets import add_row, card, combo, double_spin, int_spin, line_edit, switch
+from voicecontrol.wake_word.models import available_wake_word_models
 
 Binding = tuple[tuple[str, ...], Callable[[], Any]]
 
@@ -38,6 +41,11 @@ def _set_nested(config: dict[str, Any], path: tuple[str, ...], value: Any) -> No
     for key in path[:-1]:
         target = target[key]
     target[path[-1]] = value
+
+
+def _optional_float_text(text: str) -> float | None:
+    stripped = text.strip()
+    return None if stripped == "" else float(stripped)
 
 
 def _register(bindings: list[Binding], path: tuple[str, ...], reader: Callable[[], Any]) -> None:
@@ -58,11 +66,55 @@ class SettingsWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         root = QWidget()
-        root_layout = QVBoxLayout(root)
+        root_layout = QHBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        self._recording_nav = QPushButton("Recording")
+        self._recording_nav.setObjectName("navRecording")
+        self._settings_nav = QPushButton("Settings")
+        self._settings_nav.setObjectName("navSettings")
+        for button in (self._recording_nav, self._settings_nav):
+            button.setCheckable(True)
+
+        sidebar = QWidget()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(210)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(18, 30, 14, 24)
+        sidebar_layout.setSpacing(8)
+
+        brand = QLabel("VoiceControl")
+        brand.setObjectName("sidebarTitle")
+        sidebar_layout.addWidget(brand)
+        sidebar_layout.addSpacing(16)
+        sidebar_layout.addWidget(self._recording_nav)
+        sidebar_layout.addWidget(self._settings_nav)
+        sidebar_layout.addStretch(1)
+
+        self._page_stack = QStackedWidget()
+        self._page_stack.setObjectName("pageStack")
+        self._recording_page = self._build_recording_page()
+        self._settings_page = self._build_settings_page()
+        self._page_stack.addWidget(self._recording_page)
+        self._page_stack.addWidget(self._settings_page)
+
+        self._recording_nav.clicked.connect(lambda: self._show_page(0))
+        self._settings_nav.clicked.connect(lambda: self._show_page(1))
+        self._show_page(0)
+
+        root_layout.addWidget(sidebar, 0)
+        root_layout.addWidget(self._page_stack, 1)
+        self.setCentralWidget(root)
+
+    def _build_settings_page(self) -> QWidget:
+        page = QWidget()
+        page.setObjectName("settingsPage")
+        root_layout = QVBoxLayout(page)
         root_layout.setContentsMargins(36, 30, 36, 28)
         root_layout.setSpacing(0)
 
-        title = QLabel("VoiceControl")
+        title = QLabel("Settings")
         title.setObjectName("title")
         title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
         root_layout.addWidget(title)
@@ -91,7 +143,37 @@ class SettingsWindow(QMainWindow):
         scroll.setWidget(content)
         root_layout.addWidget(scroll, 1)
         root_layout.addLayout(self._footer())
-        self.setCentralWidget(root)
+        return page
+
+    def _build_recording_page(self) -> QWidget:
+        page = QWidget()
+        page.setObjectName("recordingPage")
+        root_layout = QVBoxLayout(page)
+        root_layout.setContentsMargins(36, 30, 36, 28)
+        root_layout.setSpacing(0)
+
+        title = QLabel("Recording")
+        title.setObjectName("title")
+        title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        root_layout.addWidget(title)
+
+        subtitle = QLabel("控制托盘后台的录音流程。")
+        subtitle.setObjectName("subtitle")
+        root_layout.addWidget(subtitle)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(18)
+        self._add_recording_control_card(content_layout)
+        content_layout.addStretch(1)
+        root_layout.addWidget(content, 1)
+        return page
+
+    def _show_page(self, index: int) -> None:
+        self._page_stack.setCurrentIndex(index)
+        self._recording_nav.setChecked(index == 0)
+        self._settings_nav.setChecked(index == 1)
 
     def _footer(self) -> QHBoxLayout:
         footer = QHBoxLayout()
@@ -109,6 +191,32 @@ class SettingsWindow(QMainWindow):
         save_button.clicked.connect(self._save_current)
         reset_button.clicked.connect(self._reload_window)
         return footer
+
+    def _add_recording_control_card(self, content_layout: QVBoxLayout) -> None:
+        frame, layout = card("Recording")
+        start_button = QPushButton("开始录音")
+        stop_button = QPushButton("停止录音")
+        stop_button.setObjectName("secondary")
+
+        controls = QHBoxLayout()
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(14)
+        controls.addWidget(start_button)
+        controls.addWidget(stop_button)
+        controls.addStretch(1)
+        layout.addLayout(controls)
+
+        start_button.clicked.connect(self._request_start_recording)
+        stop_button.clicked.connect(self._request_stop_recording)
+        content_layout.addWidget(frame)
+
+    def _request_start_recording(self) -> None:
+        write_control_command(START_RECORDING)
+        QMessageBox.information(self, "已发送", "已请求托盘后台开始录音。")
+
+    def _request_stop_recording(self) -> None:
+        write_control_command(STOP_RECORDING)
+        QMessageBox.information(self, "已发送", "已请求托盘后台停止录音。")
 
     def _add_audio_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Audio")
@@ -146,23 +254,23 @@ class SettingsWindow(QMainWindow):
         frame, layout = card("Auto Stop")
         speech_threshold = double_spin(_get_nested(self._config, ("vad", "speech_threshold")), 0.05, 0.95, 0.05)
         silence_duration = double_spin(_get_nested(self._config, ("vad", "silence_duration")), 0.5, 10.0, 0.25)
-        max_record = double_spin(_get_nested(self._config, ("vad", "max_record_seconds")), 5.0, 600.0, 5.0)
+        max_record = line_edit(_get_nested(self._config, ("vad", "max_record_seconds")), "180")
         start_timeout = double_spin(_get_nested(self._config, ("vad", "start_timeout")), 1.0, 60.0, 1.0)
 
         add_row(layout, "语音阈值", speech_threshold, "越低越敏感，也越容易把噪声当成人声。")
         add_row(layout, "静音停录秒数", silence_duration, "说完后静音多久自动停止录音。")
-        add_row(layout, "最长录音秒数", max_record, "兜底保护，避免一直录下去。")
+        add_row(layout, "最长录音秒数", max_record, "留空取消硬上限；请使用托盘、F9 或手动停止。")
         add_row(layout, "起始超时秒数", start_timeout, "开始录音后多久没说话就放弃。")
 
         _register(self._bindings, ("vad", "speech_threshold"), speech_threshold.value)
         _register(self._bindings, ("vad", "silence_duration"), silence_duration.value)
-        _register(self._bindings, ("vad", "max_record_seconds"), max_record.value)
+        _register(self._bindings, ("vad", "max_record_seconds"), lambda: _optional_float_text(max_record.text()))
         _register(self._bindings, ("vad", "start_timeout"), start_timeout.value)
         content_layout.addWidget(frame)
 
     def _add_wake_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Wake Word")
-        wake_model = line_edit(_get_nested(self._config, ("wake_word", "model")), "hey_jarvis")
+        wake_model = combo(_get_nested(self._config, ("wake_word", "model")), available_wake_word_models())
         wake_threshold = double_spin(_get_nested(self._config, ("wake_word", "threshold")), 0.05, 0.95, 0.05)
         wake_cooldown = double_spin(_get_nested(self._config, ("wake_word", "cooldown")), 0.0, 10.0, 0.5)
 
@@ -170,7 +278,7 @@ class SettingsWindow(QMainWindow):
         add_row(layout, "唤醒阈值", wake_threshold, "越低越容易唤醒，也更容易误触发。")
         add_row(layout, "冷却秒数", wake_cooldown, "上一条命令结束后，短时间内忽略重复唤醒。")
 
-        _register(self._bindings, ("wake_word", "model"), lambda: wake_model.text().strip())
+        _register(self._bindings, ("wake_word", "model"), wake_model.currentText)
         _register(self._bindings, ("wake_word", "threshold"), wake_threshold.value)
         _register(self._bindings, ("wake_word", "cooldown"), wake_cooldown.value)
         content_layout.addWidget(frame)
@@ -178,18 +286,22 @@ class SettingsWindow(QMainWindow):
     def _add_executor_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Codex")
         codex_title = line_edit(_get_nested(self._config, ("executor", "codex_window_title")), "Codex")
+        codex_launch = line_edit(_get_nested(self._config, ("executor", "codex_launch_command")), r"C:\Path\To\Codex.exe")
+        codex_launch.setObjectName("codexLaunchCommand")
         auto_enter = switch(_get_nested(self._config, ("executor", "send_prompt_auto_enter")))
         click_before_paste = switch(_get_nested(self._config, ("executor", "click_composer_before_paste")))
         click_x = double_spin(_get_nested(self._config, ("executor", "composer_click_rel_x")), 0.0, 1.0, 0.05)
         click_y = double_spin(_get_nested(self._config, ("executor", "composer_click_rel_y")), 0.0, 1.0, 0.05)
 
         add_row(layout, "窗口标题", codex_title, "用于查找 Codex Desktop 窗口的标题子串。")
+        add_row(layout, "启动命令", codex_launch, "找不到窗口时尝试启动；留空则只报错。")
         add_row(layout, "粘贴后自动回车", auto_enter)
         add_row(layout, "粘贴前点击输入框", click_before_paste)
         add_row(layout, "输入框 X 位置", click_x, "窗口内相对坐标，0 左侧，1 右侧。")
         add_row(layout, "输入框 Y 位置", click_y, "窗口内相对坐标，0 顶部，1 底部。")
 
         _register(self._bindings, ("executor", "codex_window_title"), lambda: codex_title.text().strip())
+        _register(self._bindings, ("executor", "codex_launch_command"), lambda: codex_launch.text().strip())
         _register(self._bindings, ("executor", "send_prompt_auto_enter"), auto_enter.isChecked)
         _register(self._bindings, ("executor", "click_composer_before_paste"), click_before_paste.isChecked)
         _register(self._bindings, ("executor", "composer_click_rel_x"), click_x.value)

@@ -38,6 +38,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "executor": {
         "codex_window_title": "Codex",
+        "codex_launch_command": "",
+        "codex_launch_timeout": 15.0,
+        "codex_launch_poll_interval": 0.5,
         "send_prompt_auto_enter": True,
         "click_composer_before_paste": True,
         "composer_click_rel_x": 0.5,

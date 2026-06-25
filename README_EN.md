@@ -95,6 +95,7 @@ All tunables live in [`src/voicecontrol/config/settings.py`](src/voicecontrol/co
 | Parameter | Default | Description |
 | --- | --- | --- |
 | `WAKE_WORD_MODEL` | `hey_jarvis` | Wake-word model |
+| `wake_word.model` | `hey_jarvis` | Select `hey_jarvis` or bundled custom `world_activate` in `config.json` / settings UI |
 | `WAKE_THRESHOLD` | `0.5` | Wake sensitivity (lower = more sensitive) |
 | `VAD_SILENCE_DURATION` | `3.0` | Trailing silence before stop (seconds) |
 | `CODEX_WINDOW_TITLE` | `Codex` | Window title substring to match |

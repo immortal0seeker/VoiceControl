@@ -44,7 +44,7 @@ VAD_SILENCE_DURATION: float = 3.0
 # Minimum total speech before auto-stop may trigger (s) — avoids early cutoff.
 VAD_MIN_SPEECH_DURATION: float = 0.3
 # Safety caps for the auto-stop capture loop.
-VAD_MAX_RECORD_SECONDS: float = 180.0   # hard stop even if silence never seen
+VAD_MAX_RECORD_SECONDS: float | None = 180.0  # None disables the hard cap.
 VAD_START_TIMEOUT: float = 8.0         # give up if no speech starts at all
 VAD_POLL_INTERVAL: float = 0.15        # how often to re-check the buffer (s)
 
@@ -67,6 +67,10 @@ WHISPER_CPU_COMPUTE_TYPE: str = "int8"
 # --- Executor / desktop automation -----------------------------------------
 # Substring (case-insensitive) used to locate the target app window.
 CODEX_WINDOW_TITLE: str = "Codex"
+# Optional executable path or launch command used when the Codex window is absent.
+CODEX_LAUNCH_COMMAND: str = ""
+CODEX_LAUNCH_TIMEOUT: float = 15.0
+CODEX_LAUNCH_POLL_INTERVAL: float = 0.5
 # Press Enter after pasting to submit the prompt.
 SEND_PROMPT_AUTO_ENTER: bool = True
 # Delays (seconds) around desktop actions — keep small but non-zero (AGENTS §6).
@@ -143,6 +147,9 @@ WHISPER_CONDITION_ON_PREVIOUS_TEXT = _STT_CONFIG["whisper_condition_on_previous_
 
 _EXECUTOR_CONFIG = _USER_CONFIG["executor"]
 CODEX_WINDOW_TITLE = _EXECUTOR_CONFIG["codex_window_title"]
+CODEX_LAUNCH_COMMAND = _EXECUTOR_CONFIG["codex_launch_command"]
+CODEX_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["codex_launch_timeout"]
+CODEX_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["codex_launch_poll_interval"]
 SEND_PROMPT_AUTO_ENTER = _EXECUTOR_CONFIG["send_prompt_auto_enter"]
 CLICK_COMPOSER_BEFORE_PASTE = _EXECUTOR_CONFIG["click_composer_before_paste"]
 COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["composer_click_rel_x"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -61,6 +61,7 @@ class VoiceOrchestrator:
         self,
         detector: EndpointDetector | None = None,
         stop_event: threading.Event | None = None,
+        stop_events: Sequence[threading.Event] | None = None,
     ) -> np.ndarray:
         """Record from the mic and auto-stop after trailing silence.
 
@@ -73,12 +74,15 @@ class VoiceOrchestrator:
         recorder.start()
         start = time.monotonic()
         last_log = 0.0
+        active_stop_events = list(stop_events or [])
+        if stop_event is not None:
+            active_stop_events.append(stop_event)
 
         try:
             while True:
                 time.sleep(settings.VAD_POLL_INTERVAL)
                 elapsed = time.monotonic() - start
-                if stop_event is not None and stop_event.is_set():
+                if any(event.is_set() for event in active_stop_events):
                     logger.info("Manual recording stop requested after %.1fs.", elapsed)
                     break
                 # Feed only newly captured samples; the detector keeps running
@@ -102,8 +106,9 @@ class VoiceOrchestrator:
                 if not state.speech_started and elapsed >= settings.VAD_START_TIMEOUT:
                     logger.info("No speech within %.1fs; stopping.", settings.VAD_START_TIMEOUT)
                     break
-                if elapsed >= settings.VAD_MAX_RECORD_SECONDS:
-                    logger.warning("Max record duration (%.0fs) reached.", settings.VAD_MAX_RECORD_SECONDS)
+                max_record_seconds = settings.VAD_MAX_RECORD_SECONDS
+                if max_record_seconds is not None and elapsed >= max_record_seconds:
+                    logger.warning("Max record duration (%.0fs) reached.", max_record_seconds)
                     break
         finally:
             audio = recorder.stop()
@@ -114,7 +119,8 @@ class VoiceOrchestrator:
         detector: WakeWordDetector,
         stop_event: threading.Event,
         is_active: Callable[[], bool] | None,
-    ) -> bool:
+        manual_record_event: threading.Event | None = None,
+    ) -> str | None:
         """Block until the wake word is heard. Return False if stopped/paused-out.
 
         Opens (and closes) its own mic frame stream so the input device is free
@@ -123,14 +129,16 @@ class VoiceOrchestrator:
         with MicFrameStream(settings.WAKE_FRAME_SAMPLES, dtype="int16") as mic:
             detector.reset()
             while not stop_event.is_set():
+                if manual_record_event is not None and manual_record_event.is_set():
+                    return "manual"
                 if is_active is not None and not is_active():
-                    return False  # paused: drop out so caller re-checks state
+                    return None  # paused: drop out so caller re-checks state
                 frame = mic.read(timeout=0.2)
                 if frame is None:
                     continue
                 if detector.score(frame) >= detector.threshold:
-                    return True
-        return False
+                    return "wake"
+        return None
 
     def run_wake_loop(
         self,
@@ -139,6 +147,8 @@ class VoiceOrchestrator:
         is_active: Callable[[], bool] | None = None,
         on_event: Callable[[str, PipelineResult | None], None] | None = None,
         manual_stop_key: str | None = None,
+        manual_record_event: threading.Event | None = None,
+        recording_stop_event: threading.Event | None = None,
     ) -> None:
         """Always-on loop: wake word → record command → transcribe → send.
 
@@ -164,19 +174,43 @@ class VoiceOrchestrator:
                 if stop_event.is_set():
                     break
 
-            woke = self._listen_for_wake(detector, stop_event, is_active)
-            if not woke:
+            if manual_record_event is not None and manual_record_event.is_set():
+                manual_record_event.clear()
+                trigger = "manual"
+            else:
+                trigger = self._listen_for_wake(
+                    detector,
+                    stop_event,
+                    is_active,
+                    manual_record_event,
+                )
+                if trigger == "manual" and manual_record_event is not None:
+                    manual_record_event.clear()
+            if trigger is None:
                 continue  # stopped or paused; re-check loop condition
 
-            logger.info("Wake word detected.")
-            feedback.wake_cue()
+            if trigger == "wake":
+                logger.info("Wake word detected.")
+                feedback.wake_cue()
+            else:
+                logger.info("Manual recording requested.")
             notify("wake")
 
+            extra_stop_events = []
+            if recording_stop_event is not None:
+                recording_stop_event.clear()
+                extra_stop_events.append(recording_stop_event)
+
             if manual_stop_key is None:
-                audio = self.capture_until_silence()
+                audio = self.capture_until_silence(stop_events=extra_stop_events)
             else:
-                with ManualStopHotkey(manual_stop_key) as recording_stop_event:
-                    audio = self.capture_until_silence(stop_event=recording_stop_event)
+                with ManualStopHotkey(manual_stop_key) as hotkey_stop_event:
+                    if extra_stop_events:
+                        audio = self.capture_until_silence(
+                            stop_events=[*extra_stop_events, hotkey_stop_event]
+                        )
+                    else:
+                        audio = self.capture_until_silence(stop_event=hotkey_stop_event)
             notify("transcribing")
             result = self.process_audio(audio)
             feedback.done_cue()
