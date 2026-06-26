@@ -24,6 +24,7 @@ from voicecontrol.audio.recorder import RecordingError, StreamRecorder, record
 from voicecontrol.config import settings
 from voicecontrol.pipeline.orchestrator import PipelineResult, VoiceOrchestrator
 from voicecontrol.stt.whisper_engine import TranscriptionError
+from voicecontrol.tts.status_speech import create_status_speech_subscriber
 from voicecontrol.utils.hotkeys import ManualStopHotkey
 
 logger = logging.getLogger(__name__)
@@ -147,6 +148,7 @@ def main() -> int:
 
     print("Loading speech model...")
     orchestrator = VoiceOrchestrator(send_enabled=send_enabled)
+    status_speech = create_status_speech_subscriber(orchestrator.status_publisher)
     try:
         orchestrator.load()
         if use_wake:
@@ -161,6 +163,9 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\nInterrupted.")
         return 130
+    finally:
+        if status_speech is not None:
+            status_speech.close()
     return 0
 
 

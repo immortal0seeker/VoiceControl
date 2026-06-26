@@ -18,9 +18,11 @@ import numpy as np
 
 from voicecontrol.audio.recorder import MicFrameStream, StreamRecorder, save_wav
 from voicecontrol.config import settings
+from voicecontrol.events.status import StatusPublisher, StatusType, default_status_publisher
 from voicecontrol.executor.app_driver import AppDriver
 from voicecontrol.executor.codex_driver import CodexDriver
 from voicecontrol.executor.window_utils import WindowError
+from voicecontrol.history.store import CommandHistoryRecord, append_command_history
 from voicecontrol.stt.whisper_engine import WhisperEngine
 from voicecontrol.utils import feedback
 from voicecontrol.utils.hotkeys import ManualStopHotkey
@@ -48,10 +50,20 @@ class VoiceOrchestrator:
         engine: WhisperEngine | None = None,
         driver: AppDriver | None = None,
         send_enabled: bool = True,
+        status_publisher: StatusPublisher | None = None,
     ) -> None:
         self.engine = engine or WhisperEngine()
         self.driver = driver or CodexDriver()
         self.send_enabled = send_enabled
+        self.status_publisher = status_publisher or default_status_publisher
+
+    def _publish_status(
+        self,
+        event_type: StatusType,
+        message: str = "",
+        data: dict[str, object] | None = None,
+    ) -> None:
+        self.status_publisher.publish(event_type, message=message, data=data)
 
     def load(self) -> None:
         """Pre-load the STT model so the first utterance isn't slow."""
@@ -164,6 +176,7 @@ class VoiceOrchestrator:
                 on_event(stage, result)
 
         last_done_at: float = 0.0
+        self._publish_status(StatusType.LISTENING)
         notify("listening")
         while not stop_event.is_set():
             # Cooldown measured from the end of the previous command, so a
@@ -194,6 +207,7 @@ class VoiceOrchestrator:
                 feedback.wake_cue()
             else:
                 logger.info("Manual recording requested.")
+            self._publish_status(StatusType.WAKE, data={"trigger": trigger})
             notify("wake")
 
             extra_stop_events = []
@@ -202,9 +216,11 @@ class VoiceOrchestrator:
                 extra_stop_events.append(recording_stop_event)
 
             if manual_stop_key is None:
+                self._publish_status(StatusType.RECORDING)
                 audio = self.capture_until_silence(stop_events=extra_stop_events)
             else:
                 with ManualStopHotkey(manual_stop_key) as hotkey_stop_event:
+                    self._publish_status(StatusType.RECORDING)
                     if extra_stop_events:
                         audio = self.capture_until_silence(
                             stop_events=[*extra_stop_events, hotkey_stop_event]
@@ -216,7 +232,9 @@ class VoiceOrchestrator:
             feedback.done_cue()
             notify("done", result)
             last_done_at = time.monotonic()
+            self._publish_status(StatusType.LISTENING)
             notify("listening")
+        self._publish_status(StatusType.STOPPED)
 
     def process_audio(
         self,
@@ -231,16 +249,49 @@ class VoiceOrchestrator:
         if wav_path is None:
             wav_path = settings.new_recording_path()
         saved = save_wav(audio, wav_path)
-        text = self.engine.transcribe_file(saved)
+        self._publish_status(StatusType.TRANSCRIBING, data={"wav_path": str(saved)})
+        try:
+            text = self.engine.transcribe_file(saved)
+        except Exception as exc:
+            append_command_history(
+                CommandHistoryRecord(
+                    text="",
+                    wav_path=saved,
+                    sent=False,
+                    error=str(exc),
+                )
+            )
+            self._publish_status(StatusType.ERROR, message=str(exc), data={"stage": "transcribing"})
+            raise
 
         sent = False
         send_error: str | None = None
         if self.send_enabled and text.strip():
+            self._publish_status(StatusType.SENDING, data={"text": text})
             try:
                 self.driver.send_prompt(text)
                 sent = True
             except WindowError as exc:
                 send_error = str(exc)
                 logger.warning("Could not send to %s: %s", self.driver.app_name, exc)
+                self._publish_status(StatusType.ERROR, message=send_error, data={"stage": "sending"})
 
-        return PipelineResult(text=text, wav_path=saved, sent=sent, send_error=send_error)
+        result = PipelineResult(text=text, wav_path=saved, sent=sent, send_error=send_error)
+        append_command_history(
+            CommandHistoryRecord(
+                text=result.text,
+                wav_path=result.wav_path,
+                sent=result.sent,
+                send_error=result.send_error,
+            )
+        )
+        self._publish_status(
+            StatusType.DONE,
+            data={
+                "text": result.text,
+                "wav_path": str(result.wav_path),
+                "sent": result.sent,
+                "send_error": result.send_error,
+            },
+        )
+        return result

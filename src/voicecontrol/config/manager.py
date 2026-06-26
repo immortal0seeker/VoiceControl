@@ -58,6 +58,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "done_freq": 1320,
         "done_ms": 120,
     },
+    "tts": {
+        "enabled": True,
+        "rate": 0,
+        "volume": 100,
+        "voice": None,
+    },
     "hotkeys": {
         "record_hotkey": "f9",
         "quit_hotkey": "esc",

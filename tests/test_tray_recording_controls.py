@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock
 
 from voicecontrol import tray_app
+from voicecontrol.events.status import StatusPublisher, StatusType
 
 
 class TrayRecordingControlTests(unittest.TestCase):
@@ -14,6 +15,7 @@ class TrayRecordingControlTests(unittest.TestCase):
         app._recording_stop_event = threading.Event()
         app._is_recording = False
         app._icon = Mock()
+        app._status_unsubscribe = None
         return app
 
     def test_recording_menu_label_changes_with_recording_state(self) -> None:
@@ -64,6 +66,31 @@ class TrayRecordingControlTests(unittest.TestCase):
 
         app._handle_control_command("stop_recording")
         self.assertTrue(app._recording_stop_event.is_set())
+        self.assertFalse(app._is_recording)
+
+    def test_status_events_update_tray_recording_state_and_title(self) -> None:
+        app = self._app()
+        publisher = StatusPublisher()
+
+        app._subscribe_status_events(publisher)
+        publisher.publish(StatusType.RECORDING)
+
+        self.assertTrue(app._is_recording)
+        self.assertIn("VoiceControl", app._icon.title)
+        app._icon.update_menu.assert_called_once()
+
+        publisher.publish(StatusType.TRANSCRIBING)
+
+        self.assertFalse(app._is_recording)
+
+    def test_status_event_subscription_can_be_closed(self) -> None:
+        app = self._app()
+        publisher = StatusPublisher()
+        app._subscribe_status_events(publisher)
+
+        app._close_status_subscription()
+        publisher.publish(StatusType.RECORDING)
+
         self.assertFalse(app._is_recording)
 
 

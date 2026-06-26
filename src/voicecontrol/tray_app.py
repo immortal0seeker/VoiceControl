@@ -20,6 +20,7 @@ from pystray import Icon, Menu, MenuItem
 
 from voicecontrol.config import settings
 from voicecontrol.control.commands import START_RECORDING, STOP_RECORDING, read_control_command
+from voicecontrol.events.status import StatusEvent, StatusPublisher
 from voicecontrol.utils import autostart
 
 if TYPE_CHECKING:
@@ -31,8 +32,12 @@ _STAGE_TITLES = {
     "loading": "加载中…",
     "listening": f"监听中（说 {settings.WAKE_WORD_MODEL}）",
     "wake": "已唤醒，请说话…",
+    "recording": "录音中…",
     "transcribing": "识别中…",
+    "sending": "发送中…",
     "done": "已发送到 Codex",
+    "error": "出错（见日志）",
+    "stopped": "已停止",
 }
 
 
@@ -86,6 +91,8 @@ class TrayApp:
         self._paused = threading.Event()
         self._manual_record_event = threading.Event()
         self._recording_stop_event = threading.Event()
+        self._status_speech = None
+        self._status_unsubscribe = None
         self._is_recording = False
         self._icon = Icon(
             "VoiceControl",
@@ -156,19 +163,34 @@ class TrayApp:
 
     # --- worker ------------------------------------------------------------
     def _set_stage(self, stage: str, _result: PipelineResult | None = None) -> None:
-        if stage == "wake":
+        if stage in {"wake", "recording"}:
             self._is_recording = True
-        elif stage in {"transcribing", "done", "listening", "paused", "stopped", "error"}:
+        elif stage in {"transcribing", "sending", "done", "listening", "paused", "stopped", "error"}:
             self._is_recording = False
         self._icon.update_menu()
         self._icon.title = f"VoiceControl — {_STAGE_TITLES.get(stage, stage)}"
 
+    def _on_status_event(self, event: StatusEvent) -> None:
+        self._set_stage(event.type.value)
+
+    def _subscribe_status_events(self, publisher: StatusPublisher) -> None:
+        self._close_status_subscription()
+        self._status_unsubscribe = publisher.subscribe(self._on_status_event)
+
+    def _close_status_subscription(self) -> None:
+        if self._status_unsubscribe is not None:
+            self._status_unsubscribe()
+            self._status_unsubscribe = None
+
     def _worker(self) -> None:
         try:
             from voicecontrol.pipeline.orchestrator import VoiceOrchestrator
+            from voicecontrol.tts.status_speech import create_status_speech_subscriber
             from voicecontrol.wake_word.detector import WakeWordDetector
 
             orchestrator = VoiceOrchestrator()
+            self._subscribe_status_events(orchestrator.status_publisher)
+            self._status_speech = create_status_speech_subscriber(orchestrator.status_publisher)
             orchestrator.load()
             detector = WakeWordDetector()
             self._set_stage("listening")
@@ -176,7 +198,6 @@ class TrayApp:
                 detector=detector,
                 stop_event=self._stop_event,
                 is_active=lambda: not self._paused.is_set(),
-                on_event=self._set_stage,
                 manual_stop_key=settings.RECORD_HOTKEY,
                 manual_record_event=self._manual_record_event,
                 recording_stop_event=self._recording_stop_event,
@@ -184,6 +205,11 @@ class TrayApp:
         except Exception:
             logger.exception("Wake loop crashed.")
             self._icon.title = "VoiceControl — 出错（见日志）"
+        finally:
+            if self._status_speech is not None:
+                self._status_speech.close()
+                self._status_speech = None
+            self._close_status_subscription()
 
     def _control_worker(self) -> None:
         while not self._stop_event.is_set():

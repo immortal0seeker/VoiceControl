@@ -11,6 +11,19 @@ class CheckedInConfigTests(unittest.TestCase):
 
         self.assertEqual(config["vad"]["max_record_seconds"], 180.0)
 
+    def test_checked_in_config_has_tts_defaults(self) -> None:
+        config = load_config(CONFIG_PATH)
+
+        self.assertEqual(
+            config["tts"],
+            {
+                "enabled": True,
+                "rate": 0,
+                "volume": 100,
+                "voice": None,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

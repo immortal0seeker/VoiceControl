@@ -103,10 +103,17 @@ FEEDBACK_WAKE_MS: int = 150
 FEEDBACK_DONE_FREQ: int = 1320
 FEEDBACK_DONE_MS: int = 120
 
+# --- Text-to-speech --------------------------------------------------------
+TTS_ENABLED: bool = True
+TTS_RATE: int = 0
+TTS_VOLUME: int = 100
+TTS_VOICE: str | None = None
+
 # --- Logging / tray daemon -------------------------------------------------
 # Background (tray) mode: one log file per day under LOG_DIR (pythonw has no console).
 # Foreground CLI (main.py) logs to the console only; it does not use log_file_path().
 LOG_DIR: Path = PROJECT_ROOT / "logs"
+COMMAND_HISTORY_PATH: Path = LOG_DIR / "command_history.jsonl"
 
 
 def log_file_path() -> Path:
@@ -166,6 +173,12 @@ FEEDBACK_WAKE_FREQ = _FEEDBACK_CONFIG["wake_freq"]
 FEEDBACK_WAKE_MS = _FEEDBACK_CONFIG["wake_ms"]
 FEEDBACK_DONE_FREQ = _FEEDBACK_CONFIG["done_freq"]
 FEEDBACK_DONE_MS = _FEEDBACK_CONFIG["done_ms"]
+
+_TTS_CONFIG = _USER_CONFIG["tts"]
+TTS_ENABLED = _TTS_CONFIG["enabled"]
+TTS_RATE = _TTS_CONFIG["rate"]
+TTS_VOLUME = _TTS_CONFIG["volume"]
+TTS_VOICE = _TTS_CONFIG["voice"]
 
 
 def ensure_dirs() -> None:

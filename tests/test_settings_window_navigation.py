@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -51,6 +52,24 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         window = SettingsWindow(load_config())
 
         self.assertIsNotNone(window.findChild(QLineEdit, "codexLaunchCommand"))
+
+    def test_settings_page_exposes_tts_controls(self) -> None:
+        window = SettingsWindow(load_config())
+
+        self.assertIsNotNone(window.findChild(QWidget, "ttsEnabled"))
+        self.assertIsNotNone(window.findChild(QWidget, "ttsRate"))
+        self.assertIsNotNone(window.findChild(QWidget, "ttsVolume"))
+        self.assertIsNotNone(window.findChild(QLineEdit, "ttsVoice"))
+        self.assertIsNotNone(window.findChild(QPushButton, "testTtsButton"))
+
+    def test_tts_test_button_speaks_sample_phrase(self) -> None:
+        window = SettingsWindow(load_config())
+        button = window.findChild(QPushButton, "testTtsButton")
+
+        with patch("voicecontrol.ui.settings_window.TextSpeaker") as speaker_class:
+            button.click()
+
+        speaker_class.return_value.speak.assert_called_once_with("我在")
 
 
 if __name__ == "__main__":

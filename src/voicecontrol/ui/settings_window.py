@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from voicecontrol.control.commands import START_RECORDING, STOP_RECORDING, write_control_command
 from voicecontrol.config.manager import ConfigError, load_config, save_config
+from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.assets import asset_path
 from voicecontrol.ui.widgets import add_row, card, combo, double_spin, int_spin, line_edit, switch
 from voicecontrol.wake_word.models import available_wake_word_models
@@ -137,6 +138,7 @@ class SettingsWindow(QMainWindow):
         self._add_vad_card(content_layout)
         self._add_wake_card(content_layout)
         self._add_executor_card(content_layout)
+        self._add_tts_card(content_layout)
         self._add_feedback_card(content_layout)
 
         content_layout.addStretch(1)
@@ -307,6 +309,52 @@ class SettingsWindow(QMainWindow):
         _register(self._bindings, ("executor", "composer_click_rel_x"), click_x.value)
         _register(self._bindings, ("executor", "composer_click_rel_y"), click_y.value)
         content_layout.addWidget(frame)
+
+    def _add_tts_card(self, content_layout: QVBoxLayout) -> None:
+        frame, layout = card("Text to Speech")
+        tts_enabled = switch(_get_nested(self._config, ("tts", "enabled")))
+        tts_enabled.setObjectName("ttsEnabled")
+        tts_rate = int_spin(_get_nested(self._config, ("tts", "rate")), -10, 10, 1)
+        tts_rate.setObjectName("ttsRate")
+        tts_volume = int_spin(_get_nested(self._config, ("tts", "volume")), 0, 100, 5)
+        tts_volume.setObjectName("ttsVolume")
+        tts_voice = line_edit(_get_nested(self._config, ("tts", "voice")), "留空使用系统默认语音")
+        tts_voice.setObjectName("ttsVoice")
+        test_button = QPushButton("测试 TTS")
+        test_button.setObjectName("testTtsButton")
+
+        add_row(layout, "启用语音播报", tts_enabled)
+        add_row(layout, "语速", tts_rate, "Windows SAPI 语速，-10 到 10。")
+        add_row(layout, "音量", tts_volume, "0 到 100。")
+        add_row(layout, "语音名称", tts_voice, "可填写系统语音名称的一部分；留空使用默认语音。")
+        layout.addWidget(test_button, 0, Qt.AlignmentFlag.AlignRight)
+
+        _register(self._bindings, ("tts", "enabled"), tts_enabled.isChecked)
+        _register(self._bindings, ("tts", "rate"), tts_rate.value)
+        _register(self._bindings, ("tts", "volume"), tts_volume.value)
+        _register(
+            self._bindings,
+            ("tts", "voice"),
+            lambda: None if tts_voice.text().strip() == "" else tts_voice.text().strip(),
+        )
+        test_button.clicked.connect(
+            lambda: self._test_tts(
+                enabled=tts_enabled.isChecked(),
+                rate=tts_rate.value(),
+                volume=tts_volume.value(),
+                voice=None if tts_voice.text().strip() == "" else tts_voice.text().strip(),
+            )
+        )
+        content_layout.addWidget(frame)
+
+    def _test_tts(self, enabled: bool, rate: int, volume: int, voice: str | None) -> None:
+        if not enabled:
+            QMessageBox.information(self, "TTS 已关闭", "请先启用语音播报。")
+            return
+        try:
+            TextSpeaker(enabled=True, rate=rate, volume=volume, voice=voice).speak("我在")
+        except TtsError as exc:
+            QMessageBox.warning(self, "TTS 测试失败", str(exc))
 
     def _add_feedback_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Feedback")
