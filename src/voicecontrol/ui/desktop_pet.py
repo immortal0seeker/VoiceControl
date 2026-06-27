@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -10,6 +11,8 @@ from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QContextMenuEvent, QMouseEvent
 from PySide6.QtWidgets import QLabel, QMenu, QVBoxLayout, QWidget
 
+from voicecontrol.config import settings
+from voicecontrol.control.commands import PAUSE_LISTENING, RESUME_LISTENING, write_control_command
 from voicecontrol.events.status_snapshot import RuntimeStatusSnapshot, read_runtime_status
 from voicecontrol.ui.launcher import open_control_center as default_open_control_center
 
@@ -52,6 +55,9 @@ class DesktopPetWindow(QWidget):
         self,
         runtime_status_path: str | Path | None = None,
         open_control_center: Callable[[], None] = default_open_control_center,
+        write_control_command: Callable[[str], Path] = write_control_command,
+        position_state_path: str | Path | None = None,
+        animation_enabled: bool = settings.DESKTOP_PET_ANIMATION_ENABLED,
         poll_interval_ms: int = 1000,
     ) -> None:
         super().__init__()
@@ -60,9 +66,17 @@ class DesktopPetWindow(QWidget):
             Path(runtime_status_path) if runtime_status_path is not None else None
         )
         self._open_control_center = open_control_center
+        self._write_control_command = write_control_command
+        self._position_state_path = (
+            Path(position_state_path)
+            if position_state_path is not None
+            else settings.DESKTOP_PET_STATE_PATH
+        )
         self._drag_start_global: QPoint | None = None
         self._drag_start_window: QPoint | None = None
         self._was_dragged = False
+        self._current_status = ""
+        self._pulse_on = False
 
         self.setWindowTitle("VoiceControl Pet")
         self.setWindowFlags(
@@ -92,6 +106,15 @@ class DesktopPetWindow(QWidget):
         self._timer.setInterval(poll_interval_ms)
         self._timer.timeout.connect(self.refresh_runtime_status)
         self._timer.start()
+
+        self._animation_timer = QTimer(self)
+        self._animation_timer.setObjectName("desktopPetAnimationTimer")
+        self._animation_timer.setInterval(650)
+        self._animation_timer.timeout.connect(self._tick_animation)
+        if animation_enabled:
+            self._animation_timer.start()
+
+        self._restore_position()
         self.refresh_runtime_status()
 
     def refresh_runtime_status(self) -> None:
@@ -100,12 +123,14 @@ class DesktopPetWindow(QWidget):
         self._render_state(pet_state_from_snapshot(snapshot))
 
     def _render_state(self, state: PetState) -> None:
+        self._current_status = state.text
         self._expression_label.setText(state.expression)
         self._status_label.setText(state.text)
+        opacity = 230 if self._pulse_on and state.text in {"录音中", "出错"} else 210
         self.setStyleSheet(
             f"""
             QWidget#desktopPetWindow {{
-                background: rgba(255, 255, 255, 210);
+                background: rgba(255, 255, 255, {opacity});
                 border: 2px solid {state.accent_color};
                 border-radius: 18px;
             }}
@@ -128,6 +153,8 @@ class DesktopPetWindow(QWidget):
 
     def _build_context_menu(self) -> QMenu:
         menu = QMenu(self)
+        toggle_action = menu.addAction("恢复监听" if self._current_status == "已暂停" else "暂停监听")
+        toggle_action.triggered.connect(self._toggle_listening)
         open_action = menu.addAction("打开控制中心")
         open_action.triggered.connect(self._handle_pet_clicked)
         quit_action = menu.addAction("退出桌宠")
@@ -136,6 +163,34 @@ class DesktopPetWindow(QWidget):
 
     def _handle_pet_clicked(self) -> None:
         self._open_control_center()
+
+    def _toggle_listening(self) -> None:
+        command = RESUME_LISTENING if self._current_status == "已暂停" else PAUSE_LISTENING
+        self._write_control_command(command)
+
+    def _tick_animation(self) -> None:
+        self._pulse_on = not self._pulse_on
+        self.refresh_runtime_status()
+
+    def _restore_position(self) -> None:
+        try:
+            data = json.loads(self._position_state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+        x = data.get("x")
+        y = data.get("y")
+        if isinstance(x, int) and isinstance(y, int):
+            self.move(QPoint(x, y))
+
+    def _save_position(self) -> None:
+        self._position_state_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"x": self.pos().x(), "y": self.pos().y()}
+        self._position_state_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         self._build_context_menu().exec(event.globalPos())
@@ -172,4 +227,6 @@ class DesktopPetWindow(QWidget):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._timer.stop()
+        self._animation_timer.stop()
+        self._save_position()
         super().closeEvent(event)

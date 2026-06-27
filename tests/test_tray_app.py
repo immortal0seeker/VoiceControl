@@ -51,6 +51,49 @@ class TrayIconTests(unittest.TestCase):
         self.assertEqual(image.size, (64, 64))
 
 
+class TrayDesktopPetTests(unittest.TestCase):
+    def test_open_desktop_pet_launches_pet_module_with_current_python(self) -> None:
+        with patch.object(tray_app.subprocess, "Popen") as popen:
+            tray_app.open_desktop_pet_window()
+
+        popen.assert_called_once_with(
+            [sys.executable, "-m", "voicecontrol.ui.desktop_pet_app"],
+            close_fds=True,
+        )
+
+    def test_pet_menu_label_changes_with_pet_process_state(self) -> None:
+        app = tray_app.TrayApp.__new__(tray_app.TrayApp)
+        app._desktop_pet_process = None
+
+        idle_label = app._pet_label(Mock())
+
+        process = Mock()
+        process.poll.return_value = None
+        app._desktop_pet_process = process
+
+        active_label = app._pet_label(Mock())
+
+        self.assertNotEqual(idle_label, active_label)
+
+    def test_pet_menu_starts_and_stops_desktop_pet(self) -> None:
+        app = tray_app.TrayApp.__new__(tray_app.TrayApp)
+        app._desktop_pet_process = None
+        app._icon = Mock()
+
+        process = Mock()
+        process.poll.return_value = None
+        with patch("voicecontrol.tray_app.open_desktop_pet_window", return_value=process):
+            app._on_toggle_pet(Mock(), Mock())
+
+        self.assertEqual(app._desktop_pet_process, process)
+        app._icon.update_menu.assert_called_once()
+
+        app._on_toggle_pet(Mock(), Mock())
+
+        process.terminate.assert_called_once()
+        self.assertIsNone(app._desktop_pet_process)
+
+
 class TrayLoggingTests(unittest.TestCase):
     def test_configure_logging_uses_tray_log_directory(self) -> None:
         fake_tray_dir = Mock()

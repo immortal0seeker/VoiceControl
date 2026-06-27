@@ -122,6 +122,11 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QLineEdit, "ttsVoice"))
         self.assertIsNotNone(window.findChild(QPushButton, "testTtsButton"))
 
+    def test_settings_page_exposes_desktop_pet_controls(self) -> None:
+        window = SettingsWindow(load_config())
+
+        self.assertIsNotNone(window.findChild(QWidget, "desktopPetAnimationEnabled"))
+
     def test_tts_test_button_speaks_sample_phrase(self) -> None:
         window = SettingsWindow(load_config())
         button = window.findChild(QPushButton, "testTtsButton")

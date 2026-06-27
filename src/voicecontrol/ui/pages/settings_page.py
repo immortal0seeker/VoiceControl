@@ -1,7 +1,7 @@
 """Settings page for the VoiceControl settings UI.
 
-Houses the seven configuration cards (audio, STT, VAD, wake word, executor,
-TTS, feedback), the save/reload footer, and a live TTS test button.
+Houses the configuration cards (audio, STT, VAD, wake word, executor, TTS,
+feedback, desktop pet), the save/reload footer, and a live TTS test button.
 """
 
 from __future__ import annotations
@@ -69,6 +69,7 @@ class SettingsPage(QWidget):
         self._add_executor_card(content_layout)
         self._add_tts_card(content_layout)
         self._add_feedback_card(content_layout)
+        self._add_desktop_pet_card(content_layout)
 
         content_layout.addStretch(1)
         scroll.setWidget(content)
@@ -299,6 +300,22 @@ class SettingsPage(QWidget):
         register(self._bindings, ("feedback", "wake_ms"), wake_ms.value)
         register(self._bindings, ("feedback", "done_freq"), done_freq.value)
         register(self._bindings, ("feedback", "done_ms"), done_ms.value)
+        content_layout.addWidget(frame)
+
+    def _add_desktop_pet_card(self, content_layout: QVBoxLayout) -> None:
+        frame, layout = card("Desktop Pet")
+        animation_enabled = switch(
+            get_nested(self._config, ("desktop_pet", "animation_enabled"))
+        )
+        animation_enabled.setObjectName("desktopPetAnimationEnabled")
+
+        add_row(layout, "启用桌宠动画", animation_enabled, "关闭后桌宠仍会显示状态，但不做闪烁提示。")
+
+        register(
+            self._bindings,
+            ("desktop_pet", "animation_enabled"),
+            animation_enabled.isChecked,
+        )
         content_layout.addWidget(frame)
 
     # ------------------------------------------------------------------

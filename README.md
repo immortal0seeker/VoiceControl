@@ -56,6 +56,7 @@ python -m venv .venv
 - 暂停 / 恢复监听
 - 开始 / 停止录音（跳过唤醒词，直接录命令）
 - 打开设置
+- 显示 / 隐藏桌宠
 - 开关开机自启
 - 退出
 
@@ -69,7 +70,7 @@ python -m venv .venv
 .venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
 ```
 
-桌宠是最小透明置顶悬浮窗：可拖动，左键点击打开控制中心，右键可打开控制中心或退出。它每秒读取 `logs\runtime\runtime_status.json`，根据监听、录音、发送、出错等状态切换文字表情。
+桌宠是最小透明置顶悬浮窗：可拖动，左键点击打开控制中心，右键可暂停/恢复监听、打开控制中心或退出。它每秒读取 `logs\runtime\runtime_status.json`，根据监听、录音、发送、出错等状态切换文字表情；关闭时会记住位置。设置页的 Desktop Pet 卡片可关闭闪烁动画。
 
 ### 前台调试（有控制台输出）
 
@@ -174,7 +175,7 @@ logs/
 - Windows SAPI 流水线状态 TTS（短句）
 - runtime 状态快照（`logs/runtime/runtime_status.json`），录音页每秒刷新
 - 命令历史（`logs/history/command_history.jsonl`）与重发上一条
-- 桌宠最小悬浮窗：透明置顶、可拖动、点击打开控制中心、根据 runtime 状态切换文字表情
+- 桌宠最小悬浮窗：透明置顶、可拖动、托盘显示/隐藏、右键暂停/恢复、点击打开控制中心、记住位置、可关闭动画、根据 runtime 状态切换文字表情
 
 **计划中**
 

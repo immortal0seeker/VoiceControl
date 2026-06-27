@@ -109,6 +109,9 @@ TTS_RATE: int = 0
 TTS_VOLUME: int = 100
 TTS_VOICE: str | None = None
 
+# --- Desktop pet -----------------------------------------------------------
+DESKTOP_PET_ANIMATION_ENABLED: bool = True
+
 # --- Logging / tray daemon -------------------------------------------------
 # Background (tray) mode: one log file per day under TRAY_LOG_DIR (pythonw has no console).
 # Foreground CLI (main.py) logs to the console only; it does not use log_file_path().
@@ -120,6 +123,7 @@ RUNTIME_DIR: Path = LOG_DIR / "runtime"
 COMMAND_HISTORY_PATH: Path = HISTORY_DIR / "command_history.jsonl"
 DIAGNOSTICS_HISTORY_PATH: Path = DIAGNOSTICS_DIR / "diagnostics.jsonl"
 RUNTIME_STATUS_PATH: Path = RUNTIME_DIR / "runtime_status.json"
+DESKTOP_PET_STATE_PATH: Path = RUNTIME_DIR / "desktop_pet_state.json"
 
 
 def log_file_path() -> Path:
@@ -185,6 +189,9 @@ TTS_ENABLED = _TTS_CONFIG["enabled"]
 TTS_RATE = _TTS_CONFIG["rate"]
 TTS_VOLUME = _TTS_CONFIG["volume"]
 TTS_VOICE = _TTS_CONFIG["voice"]
+
+_DESKTOP_PET_CONFIG = _USER_CONFIG["desktop_pet"]
+DESKTOP_PET_ANIMATION_ENABLED = _DESKTOP_PET_CONFIG["animation_enabled"]
 
 
 def ensure_dirs() -> None:

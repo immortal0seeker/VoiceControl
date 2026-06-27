@@ -90,6 +90,14 @@ def open_settings_window() -> None:
     )
 
 
+def open_desktop_pet_window() -> subprocess.Popen:
+    """Open the desktop pet in a separate Python process."""
+    return subprocess.Popen(
+        [sys.executable, "-m", "voicecontrol.ui.desktop_pet_app"],
+        close_fds=True,
+    )
+
+
 class TrayApp:
     """Owns the tray icon, the worker thread, and shared control flags."""
 
@@ -102,6 +110,7 @@ class TrayApp:
         self._status_unsubscribe = None
         self._status_snapshot_store = RuntimeStatusSnapshotStore()
         self._is_recording = False
+        self._desktop_pet_process: subprocess.Popen | None = None
         self._icon = Icon(
             "VoiceControl",
             icon=_load_tray_icon_image(),
@@ -110,6 +119,7 @@ class TrayApp:
                 MenuItem(self._pause_label, self._on_toggle_pause),
                 MenuItem(self._recording_label, self._on_toggle_recording),
                 MenuItem("打开设置", self._on_open_settings, default=True),
+                MenuItem(self._pet_label, self._on_toggle_pet),
                 MenuItem(
                     "开机自启",
                     self._on_toggle_autostart,
@@ -126,6 +136,18 @@ class TrayApp:
 
     def _recording_label(self, _item: object) -> str:
         return "停止录音" if self._is_recording else "开始录音"
+
+    def _is_desktop_pet_running(self) -> bool:
+        process = self._desktop_pet_process
+        if process is None:
+            return False
+        if process.poll() is None:
+            return True
+        self._desktop_pet_process = None
+        return False
+
+    def _pet_label(self, _item: object) -> str:
+        return "隐藏桌宠" if self._is_desktop_pet_running() else "显示桌宠"
 
     def _on_toggle_pause(self, _icon: Icon, _item: object) -> None:
         if self._paused.is_set():
@@ -167,6 +189,18 @@ class TrayApp:
         except OSError:
             logger.exception("Failed to open settings UI.")
 
+    def _on_toggle_pet(self, _icon: Icon, _item: object) -> None:
+        if self._is_desktop_pet_running():
+            assert self._desktop_pet_process is not None
+            self._desktop_pet_process.terminate()
+            self._desktop_pet_process = None
+        else:
+            try:
+                self._desktop_pet_process = open_desktop_pet_window()
+            except OSError:
+                logger.exception("Failed to open desktop pet.")
+        self._icon.update_menu()
+
     def _on_toggle_autostart(self, _icon: Icon, _item: object) -> None:
         enabled = autostart.toggle()
         logger.info("Autostart toggled -> %s", enabled)
@@ -175,6 +209,10 @@ class TrayApp:
     def _on_quit(self, _icon: Icon, _item: object) -> None:
         logger.info("Quit requested from tray.")
         self._stop_event.set()
+        if self._is_desktop_pet_running():
+            assert self._desktop_pet_process is not None
+            self._desktop_pet_process.terminate()
+            self._desktop_pet_process = None
         self._icon.stop()
 
     # --- worker ------------------------------------------------------------

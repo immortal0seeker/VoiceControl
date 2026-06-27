@@ -67,6 +67,7 @@ Desktop pet (PySide6)       pythonw -m voicecontrol.ui.desktop_pet_app
 Launch at logon             tray menu toggle (HKCU Run)
 TTS status cues             "我在" / "请说" / "正在识别" / … on pipeline status events
 Runtime status              JSON snapshot under logs/runtime/runtime_status.json
+Desktop pet UX              remembers logs/runtime/desktop_pet_state.json; animation can be disabled in settings
 Command history             append-only JSONL under logs/history/command_history.jsonl
 Diagnostics                 mic / VAD / wake-word / TTS / Codex-send tests in settings UI
 Manual recording            tray menu or settings UI → file control command → skip wake word
@@ -79,7 +80,8 @@ Typical production flow:
 always-on tray daemon → openWakeWord hears wake word → beep cue (+ optional TTS "我在")
 → record command (VAD auto-stop; F9 or tray can stop early)
 → transcribe → send to Codex → history + done cue (+ optional TTS "已发送")
-tray menu: pause/resume · start/stop recording · open settings · toggle launch-at-logon · quit
+tray menu: pause/resume · start/stop recording · open settings · show/hide desktop pet · toggle launch-at-logon · quit
+desktop pet: right-click pause/resume · open control center · quit
 tray double-click: open settings/control center
 ```
 

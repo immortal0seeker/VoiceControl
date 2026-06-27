@@ -68,6 +68,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "record_hotkey": "f9",
         "quit_hotkey": "esc",
     },
+    "desktop_pet": {
+        "animation_enabled": True,
+    },
 }
 
 

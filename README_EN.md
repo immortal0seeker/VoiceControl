@@ -59,6 +59,7 @@ A **V** tray icon appears (loads `ui/assets/app_icon.png` when available). Right
 - Pause / resume listening
 - Start / stop recording (skip wake word; record a command directly)
 - Open settings
+- Show / hide desktop pet
 - Toggle launch-at-logon
 - Quit
 
@@ -75,9 +76,10 @@ When TTS is enabled, short status phrases are spoken on pipeline events (e.g. â€
 
 The desktop pet is a minimal transparent always-on-top floating window. Drag it
 to reposition it, left-click it to open the control center, or right-click it to
-open the control center or quit. It polls `logs\runtime\runtime_status.json`
-every second and switches text expressions for listening, recording, sending,
-and error states.
+pause/resume listening, open the control center, or quit. It polls
+`logs\runtime\runtime_status.json` every second and switches text expressions for
+listening, recording, sending, and error states. It remembers its last position
+on close. The Desktop Pet card in settings can disable the pulse animation.
 
 ### Foreground debug (console output)
 
@@ -184,7 +186,7 @@ logs/
 - Windows SAPI pipeline status TTS (short phrases)
 - Runtime status snapshot (`logs/runtime/runtime_status.json`) polled by the recording page
 - Command history (`logs/history/command_history.jsonl`) and resend last command
-- Minimal desktop pet floating window with transparent topmost drag, click-to-open control center, and runtime status text expressions
+- Minimal desktop pet floating window with transparent topmost drag, tray show/hide, right-click pause/resume, click-to-open control center, remembered position, optional animation, and runtime status text expressions
 
 **Planned**
 
