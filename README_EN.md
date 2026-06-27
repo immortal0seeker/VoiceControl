@@ -6,10 +6,10 @@
 
 # VoiceControl
 
-A local voice desktop assistant for Windows 11 (MVP). Wake word → record → transcribe → send to Codex Desktop automatically.
+A local voice desktop assistant for Windows 11. Wake word → record → transcribe → send to Codex Desktop automatically.
 
 ```text
-hey jarvis → beep → speak command → auto-stop on silence → Whisper STT → paste into Codex
+hey jarvis (or world_activate) → beep / TTS “我在” → speak command → auto-stop on silence → Whisper STT → paste into Codex
 ```
 
 ## Requirements
@@ -18,7 +18,7 @@ hey jarvis → beep → speak command → auto-stop on silence → Whisper STT �
 - Python 3.11+ (use the project `.venv` only — do not use global Python)
 - Microphone
 - NVIDIA GPU optional (Whisper defaults to `cuda`/`float16`; falls back to CPU automatically)
-- [Codex Desktop](https://openai.com/codex) must be **running first** (may be minimized; the app focuses the window automatically)
+- [Codex Desktop](https://openai.com/codex) should be running first (may be minimized; optional `codex_launch_command` in `config.json` can auto-launch it)
 
 ## Installation
 
@@ -31,7 +31,7 @@ python -m venv .venv
 
 `pip install -e .` installs the `voicecontrol` package in editable mode so `python -m voicecontrol.*` works from any directory.
 
-The first run downloads Whisper and openWakeWord models; an internet connection is required.
+The first run downloads Whisper and openWakeWord models; an internet connection is required. The bundled custom wake word `world_activate.onnx` ships with the package.
 
 ## Usage
 
@@ -41,7 +41,9 @@ The first run downloads Whisper and openWakeWord models; an internet connection 
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-The settings UI only reads and writes the root `config.json`. Restart the tray/listener process after saving changes.
+You can also launch it from the tray menu (**Open settings**), in a separate process.
+
+The UI reads and writes root `config.json`. **Restart the tray/listener** after saving. Pages include status, recording control, settings, TTS, mic/VAD/wake-word diagnostics, command history, logs, and background control.
 
 ### Daily use (tray daemon, recommended)
 
@@ -49,9 +51,17 @@ The settings UI only reads and writes the root `config.json`. Restart the tray/l
 .venv\Scripts\pythonw.exe -m voicecontrol.tray_app
 ```
 
-A blue **V** icon appears in the system tray. Right-click menu: pause/resume listening, toggle launch-at-logon, quit.
+A **V** tray icon appears (loads `ui/assets/app_icon.png` when available). Right-click menu:
 
-Logs: `logs\voicecontrol.log`
+- Pause / resume listening
+- Start / stop recording (skip wake word; record a command directly)
+- Open settings
+- Toggle launch-at-logon
+- Quit
+
+Logs: `logs\YYYYMMDD_voicecontrol.log` (one file per calendar day)
+
+When TTS is enabled, short status phrases are spoken on pipeline events (e.g. “我在”, “请说”, “正在识别”, “已发送”).
 
 ### Foreground debug (console output)
 
@@ -63,7 +73,7 @@ Logs: `logs\voicecontrol.log`
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
 ```
 
-Say **"hey jarvis"** (English) → hear a beep → speak your command in Chinese → recording stops after ~3 s of silence.
+Say the wake word (default **“hey jarvis”** in English, or select **world_activate** in settings) → hear a beep / TTS → speak your command in Chinese → recording stops after ~3 s of silence; press **F9** during recording to stop early.
 
 ### Hotkey mode (no wake word)
 
@@ -86,49 +96,71 @@ Say **"hey jarvis"** (English) → hear a beep → speak your command in Chinese
 
 # List visible windows (check Codex window title)
 .venv\Scripts\python.exe -m voicecontrol.executor.window_utils
+
+# Check autostart state and launch command
+.venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
+
+The settings UI also offers mic, VAD, and wake-word file tests plus recent log viewing.
 
 ## Configuration
 
-All tunables live in [`src/voicecontrol/config/settings.py`](src/voicecontrol/config/settings.py). Common options:
+User settings live in root [`config.json`](config.json), merged over code defaults by [`src/voicecontrol/config/manager.py`](src/voicecontrol/config/manager.py) and exported at runtime via [`settings.py`](src/voicecontrol/config/settings.py).
 
-| Parameter | Default | Description |
+Common options:
+
+| Parameter / config.json key | Default | Description |
 | --- | --- | --- |
-| `WAKE_WORD_MODEL` | `hey_jarvis` | Wake-word model |
-| `wake_word.model` | `hey_jarvis` | Select `hey_jarvis` or bundled custom `world_activate` in `config.json` / settings UI |
-| `WAKE_THRESHOLD` | `0.5` | Wake sensitivity (lower = more sensitive) |
-| `VAD_SILENCE_DURATION` | `3.0` | Trailing silence before stop (seconds) |
-| `CODEX_WINDOW_TITLE` | `Codex` | Window title substring to match |
-| `WHISPER_MODEL_SIZE` | `small` | Upgrade path: `medium` / `large-v3` |
+| `wake_word.model` | `hey_jarvis` | Wake word; bundled `world_activate` also available |
+| `wake_word.threshold` | `0.5` | Wake sensitivity (lower = more sensitive) |
+| `wake_word.cooldown` | `2.0` | Seconds to ignore re-triggers after a command finishes |
+| `vad.silence_duration` | `3.0` | Trailing silence before stop (seconds) |
+| `executor.codex_window_title` | `Codex` | Window title substring to match |
+| `executor.codex_launch_command` | `""` | Shell command to launch Codex if the window is missing |
+| `stt.whisper_model_size` | `small` | Upgrade path: `medium` / `large-v3` |
+| `tts.enabled` | `true` | Windows SAPI short status phrases |
+| `hotkeys.record_hotkey` | `f9` | Hotkey-mode record key; also manual stop during wake-loop recording |
 
 ## Project layout
 
 ```text
+config.json
 src/voicecontrol/
 ├── main.py           CLI entry (--once / --vad / --wake / --no-send)
 ├── tray_app.py       System-tray daemon
-├── config/settings.py
+├── config/           settings.py, manager.py
 ├── audio/            Microphone & recording
 ├── stt/              faster-whisper
 ├── vad/              Silero VAD endpointing
-├── wake_word/        openWakeWord
+├── wake_word/        openWakeWord + models/world_activate.onnx
 ├── executor/         Codex window focus + paste
-├── pipeline/         Orchestration
-└── utils/            Beeps, launch-at-logon
+├── pipeline/         Orchestration & status events
+├── control/          Tray file commands (logs/control_command.json)
+├── events/           Status pub/sub
+├── history/          Command history JSONL
+├── diagnostics/      Self-test helpers
+├── tts/              Windows SAPI status speech
+├── ui/               PySide6 settings / diagnostics UI
+└── utils/            Beeps, launch-at-logon, hotkeys
+logs/                 Daily logs, command_history.jsonl, diagnostics.jsonl
 ```
 
 ## Feature status
 
-**Shipped (MVP)**
+**Shipped**
 
 - Microphone capture and faster-whisper transcription (Chinese / English)
 - Hotkey trigger (F9 start/stop) and VAD auto-stop on silence
-- Wake word “hey jarvis” plus system-tray background daemon
-- Auto-focus Codex Desktop and paste commands
+- Wake word (`hey_jarvis` / bundled `world_activate`) plus system-tray background daemon
+- Tray manual recording, pause/resume, launch-at-logon toggle
+- Auto-focus Codex Desktop and paste commands; optional Codex auto-launch
+- PySide6 settings & diagnostics UI backed by `config.json`
+- Windows SAPI pipeline status TTS (short phrases)
+- Command history (`logs/command_history.jsonl`) and resend last command
 
 **Planned**
 
-- Text-to-speech · ChatGPT / Cursor drivers · LLM routing, etc.
+- ChatGPT / Cursor drivers · LLM routing · read-aloud of Codex replies · installer packaging, etc.
 
 ## Developer docs
 
