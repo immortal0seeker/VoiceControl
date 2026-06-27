@@ -55,8 +55,8 @@ def apple_style_sheet() -> str:
         background: #e1e1e6;
     }
     QPushButton[navButton="true"]:checked {
-        background: #d8e9ff;
-        color: #0057c2;
+        background: #dedee6;
+        color: #1d1d1f;
     }
     QLabel#sectionTitle {
         color: #1d1d1f;
@@ -139,18 +139,19 @@ def apple_style_sheet() -> str:
         height: 12px;
     }
     QPushButton {
-        background: #007aff;
+        background: #1d1d1f;
         color: #ffffff;
         border: none;
-        border-radius: 12px;
-        padding: 9px 18px;
+        border-radius: 18px;
+        min-height: 36px;
+        padding: 0 22px;
         font-weight: 600;
     }
     QPushButton:hover {
-        background: #0a84ff;
+        background: #2f2f33;
     }
     QPushButton:pressed {
-        background: #0066d6;
+        background: #000000;
     }
     QPushButton#secondary {
         background: #e9e9ef;

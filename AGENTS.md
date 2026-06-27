@@ -44,7 +44,7 @@ The editable install registers the `voicecontrol` package so
 | Default model | `small` (upgrade path: `medium` → `large-v3`) |
 | Compute | GPU first: `device="cuda"`, `compute_type="float16"`; CPU fallback (`int8`) |
 | User config | Root `config.json` merged over code defaults via `config/manager.py`; `settings.py` re-exports merged values |
-| Executor targets (in order) | Codex Desktop → ChatGPT Desktop → Cursor → others |
+| Executor targets (in order) | Codex Desktop → ChatGPT Desktop → Cursor → others (only Codex implemented) |
 | Executor design | Pluggable `AppDriver` interface, one driver per target app |
 | VAD engine | Silero VAD ONNX bundled with faster-whisper (via onnxruntime, no torch) |
 | Wake word engine | openWakeWord (ONNX/onnxruntime); built-in `hey_jarvis` or bundled custom `world_activate.onnx` — wake word only gates activation; commands stay Chinese |
@@ -121,9 +121,24 @@ VoiceControl/
 │   ├── control/                file-based commands for tray daemon
 │   ├── events/                 status publisher (pipeline → tray / TTS / UI)
 │   ├── history/                command history store + resend
-│   ├── diagnostics/            mic / VAD / wake-word tests, log reader
+│   ├── diagnostics/            mic / VAD / wake-word tests, log reader, diagnostic result store
 │   ├── tts/                    Windows SAPI speaker + status speech subscriber
-│   ├── ui/                     settings_app, settings_window, widgets, assets
+│   ├── ui/                     PySide6 settings/diagnostics UI
+│   │   ├── settings_app.py     QApplication entry point
+│   │   ├── settings_window.py  navigation shell (sidebar + QStackedWidget)
+│   │   ├── config_binding.py   config read/write helpers + Binding type
+│   │   ├── style.py            Apple-style QSS stylesheet
+│   │   ├── widgets.py          reusable form widgets (card, switch, combo, …)
+│   │   ├── assets.py           asset path resolver
+│   │   └── pages/              one QWidget subclass per page
+│   │       ├── base.py         page_layout scaffold + PlaceholderPage
+│   │       ├── status_page.py
+│   │       ├── recording_page.py
+│   │       ├── settings_page.py
+│   │       ├── diagnostics_page.py
+│   │       ├── command_history_page.py
+│   │       ├── logs_page.py
+│   │       └── background_page.py
 │   └── utils/                  feedback (beeps), autostart, hotkeys
 ├── requirements.txt
 ├── README.md

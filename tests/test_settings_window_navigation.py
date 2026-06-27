@@ -9,8 +9,10 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -24,9 +26,12 @@ from voicecontrol.config.manager import load_config
 from voicecontrol.control.commands import PAUSE_LISTENING, RESUME_LISTENING, START_RECORDING, STOP_RECORDING
 from voicecontrol.diagnostics.store import DiagnosticResult
 from voicecontrol.events.status import StatusPublisher, StatusType
+from voicecontrol.events.status_snapshot import RuntimeStatusSnapshot, write_runtime_status
 from voicecontrol.history.resend import ResendResult
 from voicecontrol.history.store import CommandHistoryRecord, append_command_history
+from voicecontrol.ui.pages.logs_page import LogsPage
 from voicecontrol.ui.settings_window import SettingsWindow
+from voicecontrol.ui.style import apple_style_sheet
 
 
 class SettingsWindowNavigationTests(unittest.TestCase):
@@ -63,9 +68,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             ("navRecording", "recordingPage"),
             ("navSettings", "settingsPage"),
             ("navTts", "ttsPage"),
-            ("navMicrophoneDiagnostics", "microphoneDiagnosticsPage"),
-            ("navVadTest", "vadTestPage"),
-            ("navWakeWordTest", "wakeWordTestPage"),
+            ("navDiagnostics", "diagnosticsPage"),
             ("navCommandHistory", "commandHistoryPage"),
             ("navLogs", "logsPage"),
             ("navBackgroundControl", "backgroundControlPage"),
@@ -84,6 +87,10 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
                 self.assertEqual(stack.currentWidget(), page)
                 self.assertTrue(button.isChecked())
+
+        self.assertIsNone(window.findChild(QPushButton, "navMicrophoneDiagnostics"))
+        self.assertIsNone(window.findChild(QPushButton, "navVadTest"))
+        self.assertIsNone(window.findChild(QPushButton, "navWakeWordTest"))
 
     def test_window_allows_null_max_record_seconds_config(self) -> None:
         config = load_config()
@@ -114,7 +121,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         window = SettingsWindow(load_config())
         button = window.findChild(QPushButton, "testTtsButton")
 
-        with patch("voicecontrol.ui.settings_window.TextSpeaker") as speaker_class:
+        with patch("voicecontrol.ui.pages.settings_page.TextSpeaker") as speaker_class:
             button.click()
 
         speaker_class.return_value.speak.assert_called_once_with("我在")
@@ -147,6 +154,72 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         self.assertIn("sending to Codex", recent.text())
         self.assertIn("window not found", recent.text())
         self.assertIn("window not found", error.text())
+
+    def test_status_page_polls_runtime_status_snapshot_every_second(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            status_path = Path(temp_dir) / "runtime_status.json"
+            write_runtime_status(
+                RuntimeStatusSnapshot(
+                    current="recording",
+                    message="recording now",
+                    is_recording=True,
+                    recent_events=[{"type": "recording", "message": "recording now", "created_at": "09:30:00"}],
+                ),
+                path=status_path,
+            )
+            window = SettingsWindow(load_config(), runtime_status_path=status_path)
+
+            timer = window.findChild(QTimer, "runtimeStatusPollTimer")
+            current = window.findChild(QLabel, "currentStatusLabel")
+            recent = window.findChild(QLabel, "recentStatusEventsLabel")
+
+            self.assertIsNotNone(timer)
+            self.assertEqual(timer.interval(), 1000)
+            self.assertIn("recording", current.text())
+            self.assertIn("recording now", recent.text())
+
+            write_runtime_status(
+                RuntimeStatusSnapshot(
+                    current="sending",
+                    message="sending to Codex",
+                    is_sending=True,
+                    recent_events=[{"type": "sending", "message": "sending to Codex", "created_at": "09:31:00"}],
+                ),
+                path=status_path,
+            )
+            timer.timeout.emit()
+
+            self.assertIn("sending", current.text())
+            self.assertIn("sending to Codex", recent.text())
+
+    def test_status_page_shows_runtime_updated_time_and_missing_file_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            status_path = Path(temp_dir) / "runtime_status.json"
+            write_runtime_status(
+                RuntimeStatusSnapshot(
+                    current="idle",
+                    message="ready",
+                    updated_at=datetime(2026, 6, 27, 9, 30, 0),
+                ),
+                path=status_path,
+            )
+
+            window = SettingsWindow(load_config(), runtime_status_path=status_path)
+            updated_at = window.findChild(QLabel, "runtimeStatusUpdatedAtLabel")
+            hint = window.findChild(QLabel, "runtimeStatusHintLabel")
+
+            self.assertIsNotNone(updated_at)
+            self.assertIsNotNone(hint)
+            self.assertIn("2026-06-27 09:30:00", updated_at.text())
+            self.assertEqual("", hint.text())
+
+            missing_path = Path(temp_dir) / "missing_runtime_status.json"
+            missing_window = SettingsWindow(load_config(), runtime_status_path=missing_path)
+            missing_hint = missing_window.findChild(QLabel, "runtimeStatusHintLabel")
+
+            self.assertIsNotNone(missing_hint)
+            self.assertIn("托盘未运行", missing_hint.text())
+            self.assertIn("状态文件不存在", missing_hint.text())
 
     def test_command_history_page_loads_records_and_refreshes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -195,7 +268,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             button = window.findChild(QPushButton, "resendLastCommandButton")
             result = window.findChild(QLabel, "resendLastCommandResultLabel")
 
-            with patch("voicecontrol.ui.settings_window.resend_last_command") as resend:
+            with patch("voicecontrol.ui.pages.command_history_page.resend_last_command") as resend:
                 resend.return_value = ResendResult(text="打开项目", sent=True)
                 button.click()
 
@@ -210,7 +283,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             button = window.findChild(QPushButton, "resendLastCommandButton")
             result = window.findChild(QLabel, "resendLastCommandResultLabel")
 
-            with patch("voicecontrol.ui.settings_window.resend_last_command") as resend:
+            with patch("voicecontrol.ui.pages.command_history_page.resend_last_command") as resend:
                 resend.return_value = ResendResult(text="打开项目", sent=False, send_error="Codex window not found")
                 button.click()
 
@@ -243,6 +316,24 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
             self.assertIn("暂无日志", text.toPlainText())
 
+    def test_logs_page_keeps_space_between_refresh_button_and_log_content(self) -> None:
+        page = LogsPage()
+        layout = page.layout()
+
+        self.assertIsNotNone(layout.itemAt(3).spacerItem())
+        self.assertGreaterEqual(layout.itemAt(3).spacerItem().sizeHint().height(), 16)
+
+    def test_primary_buttons_use_black_pill_style(self) -> None:
+        sheet = apple_style_sheet()
+
+        self.assertIn("QPushButton {", sheet)
+        self.assertIn("background: #1d1d1f;", sheet)
+        self.assertIn("min-height: 36px;", sheet)
+        self.assertIn("border-radius: 18px;", sheet)
+        self.assertNotIn("background: #007aff;", sheet)
+        self.assertNotIn("background: #0a84ff;", sheet)
+        self.assertNotIn("background: #0066d6;", sheet)
+
     def test_diagnostic_pages_call_services_and_show_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             diagnostic_path = Path(temp_dir) / "diagnostics.jsonl"
@@ -258,9 +349,9 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             wake_result = window.findChild(QLabel, "wakeWordTestResultLabel")
 
             with (
-                patch("voicecontrol.ui.settings_window.run_microphone_test") as microphone,
-                patch("voicecontrol.ui.settings_window.run_vad_file_test") as vad,
-                patch("voicecontrol.ui.settings_window.run_wake_word_file_test") as wake_word,
+                patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone,
+                patch("voicecontrol.ui.pages.diagnostics_page.run_vad_file_test") as vad,
+                patch("voicecontrol.ui.pages.diagnostics_page.run_wake_word_file_test") as wake_word,
             ):
                 microphone.return_value = DiagnosticResult(name="microphone", status="ok", details={"rms": 0.25})
                 vad.return_value = DiagnosticResult(name="vad", status="ok", details={"finished": True})
@@ -291,12 +382,64 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
         mic_result = window.findChild(QLabel, "microphoneDiagnosticResultLabel")
 
-        with patch("voicecontrol.ui.settings_window.run_microphone_test") as microphone:
+        with patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone:
             microphone.return_value = DiagnosticResult(name="microphone", status="error", error="mic unavailable")
             mic_button.click()
 
         self.assertIn("error", mic_result.text())
         self.assertIn("mic unavailable", mic_result.text())
+
+    def test_diagnostic_button_shows_busy_state_while_running(self) -> None:
+        window = SettingsWindow(load_config())
+        mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
+        mic_result = window.findChild(QLabel, "microphoneDiagnosticResultLabel")
+
+        def run_slow_diagnostic(*, diagnostic_path: Path | None = None) -> DiagnosticResult:
+            self.assertFalse(mic_button.isEnabled())
+            self.assertIn("运行中", mic_result.text())
+            return DiagnosticResult(name="microphone", status="ok")
+
+        with patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone:
+            microphone.side_effect = run_slow_diagnostic
+            mic_button.click()
+
+        self.assertTrue(mic_button.isEnabled())
+        self.assertIn("ok", mic_result.text())
+
+    def test_diagnostic_button_shows_service_exception(self) -> None:
+        window = SettingsWindow(load_config())
+        mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
+        mic_result = window.findChild(QLabel, "microphoneDiagnosticResultLabel")
+
+        with patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone:
+            microphone.side_effect = RuntimeError("mic unavailable")
+            mic_button.click()
+
+        self.assertTrue(mic_button.isEnabled())
+        self.assertIn("error", mic_result.text())
+        self.assertIn("mic unavailable", mic_result.text())
+
+    def test_diagnostics_page_keeps_space_between_cards(self) -> None:
+        window = SettingsWindow(load_config())
+        page = window.findChild(QWidget, "diagnosticsPage")
+
+        self.assertIsNotNone(page)
+        self.assertGreaterEqual(page.layout().spacing(), 14)
+
+    def test_background_control_page_groups_actions_with_spacing_and_switch(self) -> None:
+        window = SettingsWindow(load_config())
+        listening_switch = window.findChild(QCheckBox, "listeningControlSwitch")
+        recording_actions = window.findChild(QWidget, "backgroundRecordingActions")
+        test_actions = window.findChild(QWidget, "backgroundTestActions")
+        location_actions = window.findChild(QWidget, "backgroundLocationActions")
+
+        self.assertIsNotNone(listening_switch)
+        self.assertIsNotNone(recording_actions)
+        self.assertIsNotNone(test_actions)
+        self.assertIsNotNone(location_actions)
+        self.assertGreaterEqual(recording_actions.layout().spacing(), 12)
+        self.assertGreaterEqual(test_actions.layout().spacing(), 12)
+        self.assertGreaterEqual(location_actions.layout().spacing(), 12)
 
     def test_background_control_buttons_call_services(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -304,10 +447,9 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             log_path = Path(temp_dir) / "voicecontrol.log"
             window = SettingsWindow(load_config(), command_history_path=history_path, log_path=log_path)
             result = window.findChild(QLabel, "backgroundControlResultLabel")
+            listening_switch = window.findChild(QCheckBox, "listeningControlSwitch")
 
             buttons = {
-                "pause": window.findChild(QPushButton, "pauseListeningButton"),
-                "resume": window.findChild(QPushButton, "resumeListeningButton"),
                 "start": window.findChild(QPushButton, "backgroundStartRecordingButton"),
                 "stop": window.findChild(QPushButton, "backgroundStopRecordingButton"),
                 "tts": window.findChild(QPushButton, "backgroundTestTtsButton"),
@@ -317,11 +459,13 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             }
 
             with (
-                patch("voicecontrol.ui.settings_window.write_control_command") as write_command,
-                patch("voicecontrol.ui.settings_window.TextSpeaker") as speaker_class,
-                patch("voicecontrol.ui.settings_window.CodexDriver") as driver_class,
-                patch("voicecontrol.ui.settings_window.os.startfile") as startfile,
+                patch("voicecontrol.ui.pages.background_page.write_control_command") as write_command,
+                patch("voicecontrol.ui.pages.background_page.TextSpeaker") as speaker_class,
+                patch("voicecontrol.ui.pages.background_page.CodexDriver") as driver_class,
+                patch("voicecontrol.ui.pages.background_page.os.startfile") as startfile,
             ):
+                listening_switch.setChecked(False)
+                listening_switch.setChecked(True)
                 for button in buttons.values():
                     button.click()
 
@@ -337,3 +481,4 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

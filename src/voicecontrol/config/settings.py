@@ -115,6 +115,7 @@ TTS_VOICE: str | None = None
 LOG_DIR: Path = PROJECT_ROOT / "logs"
 COMMAND_HISTORY_PATH: Path = LOG_DIR / "command_history.jsonl"
 DIAGNOSTICS_HISTORY_PATH: Path = LOG_DIR / "diagnostics.jsonl"
+RUNTIME_STATUS_PATH: Path = LOG_DIR / "runtime_status.json"
 
 
 def log_file_path() -> Path:

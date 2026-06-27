@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import threading
+import tempfile
 import unittest
-from unittest.mock import Mock
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 from voicecontrol import tray_app
 from voicecontrol.control.commands import PAUSE_LISTENING, RESUME_LISTENING
 from voicecontrol.events.status import StatusPublisher, StatusType
+from voicecontrol.events.status_snapshot import RuntimeStatusSnapshotStore, read_runtime_status
 
 
 class TrayRecordingControlTests(unittest.TestCase):
@@ -79,6 +82,37 @@ class TrayRecordingControlTests(unittest.TestCase):
         app._handle_control_command(RESUME_LISTENING)
         self.assertFalse(app._paused.is_set())
 
+    def test_pause_and_resume_commands_write_runtime_status_snapshot(self) -> None:
+        app = self._app()
+        app._paused = threading.Event()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "runtime_status.json"
+            app._status_snapshot_store = RuntimeStatusSnapshotStore(path=path)
+
+            app._handle_control_command(PAUSE_LISTENING)
+            paused_snapshot = read_runtime_status(path)
+            app._handle_control_command(RESUME_LISTENING)
+            resumed_snapshot = read_runtime_status(path)
+
+        self.assertIsNotNone(paused_snapshot)
+        self.assertIsNotNone(resumed_snapshot)
+        assert paused_snapshot is not None
+        assert resumed_snapshot is not None
+        self.assertEqual(paused_snapshot.current, "paused")
+        self.assertEqual(resumed_snapshot.current, "listening")
+
+    def test_control_worker_dispatches_pause_command(self) -> None:
+        app = self._app()
+        app._paused = threading.Event()
+        app._stop_event = Mock()
+        app._stop_event.is_set.side_effect = [False, True]
+
+        with patch("voicecontrol.tray_app.read_control_command", return_value=PAUSE_LISTENING):
+            app._control_worker()
+
+        self.assertTrue(app._paused.is_set())
+        app._icon.update_menu.assert_called_once()
+
     def test_status_events_update_tray_recording_state_and_title(self) -> None:
         app = self._app()
         publisher = StatusPublisher()
@@ -93,6 +127,23 @@ class TrayRecordingControlTests(unittest.TestCase):
         publisher.publish(StatusType.TRANSCRIBING)
 
         self.assertFalse(app._is_recording)
+
+    def test_status_events_write_runtime_status_snapshot(self) -> None:
+        app = self._app()
+        publisher = StatusPublisher()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "runtime_status.json"
+            app._status_snapshot_store = RuntimeStatusSnapshotStore(path=path)
+
+            app._subscribe_status_events(publisher)
+            publisher.publish(StatusType.RECORDING, message="recording now")
+
+            snapshot = read_runtime_status(path)
+
+        self.assertIsNotNone(snapshot)
+        assert snapshot is not None
+        self.assertEqual(snapshot.current, "recording")
+        self.assertEqual(snapshot.message, "recording now")
 
     def test_status_event_subscription_can_be_closed(self) -> None:
         app = self._app()

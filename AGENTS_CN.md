@@ -46,7 +46,7 @@ pip install -e .
 | 默认模型 | `small`（升级路径：`medium` → `large-v3`） |
 | 计算设备 | GPU 优先：`device="cuda"`，`compute_type="float16"`；CPU 兜底（`int8`） |
 | 用户配置 | 根目录 `config.json` 经 `config/manager.py` 与代码默认值合并；`settings.py` 导出合并后的值 |
-| Executor 目标（按顺序） | Codex Desktop → ChatGPT Desktop → Cursor → 其它 |
+| Executor 目标（按顺序） | Codex Desktop → ChatGPT Desktop → Cursor → 其它（仅 Codex 已实现）|
 | Executor 设计 | 可插拔 `AppDriver` 接口，每个目标应用一个驱动 |
 | VAD 引擎 | 复用 faster-whisper 内置 Silero VAD ONNX（onnxruntime，无 torch） |
 | 唤醒词引擎 | openWakeWord（ONNX/onnxruntime）；内置 `hey_jarvis` 或捆绑自定义 `world_activate.onnx` — 唤醒词仅做激活，命令仍可中文 |
@@ -123,9 +123,24 @@ VoiceControl/
 │   ├── control/                托盘守护进程消费的文件命令
 │   ├── events/                 状态发布（pipeline → 托盘 / TTS / UI）
 │   ├── history/                命令历史存储 + 重发
-│   ├── diagnostics/            麦克风 / VAD / 唤醒词测试、日志读取
+│   ├── diagnostics/            麦克风 / VAD / 唤醒词测试、日志读取、诊断结果存储
 │   ├── tts/                    Windows SAPI 播报 + 状态订阅
-│   ├── ui/                     settings_app, settings_window, widgets, assets
+│   ├── ui/                     PySide6 设置/诊断 UI
+│   │   ├── settings_app.py     QApplication 入口
+│   │   ├── settings_window.py  导航壳（侧栏 + QStackedWidget）
+│   │   ├── config_binding.py   配置读写辅助 + Binding 类型
+│   │   ├── style.py            Apple 风格 QSS 样式表
+│   │   ├── widgets.py          可复用表单控件（card, switch, combo 等）
+│   │   ├── assets.py           资源路径解析
+│   │   └── pages/              每个页面一个 QWidget 子类
+│   │       ├── base.py         page_layout 脚手架 + PlaceholderPage
+│   │       ├── status_page.py
+│   │       ├── recording_page.py
+│   │       ├── settings_page.py
+│   │       ├── diagnostics_page.py
+│   │       ├── command_history_page.py
+│   │       ├── logs_page.py
+│   │       └── background_page.py
 │   └── utils/                  feedback（蜂鸣）, autostart, hotkeys
 ├── requirements.txt
 ├── README.md

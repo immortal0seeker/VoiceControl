@@ -26,7 +26,8 @@ from voicecontrol.control.commands import (
     STOP_RECORDING,
     read_control_command,
 )
-from voicecontrol.events.status import StatusEvent, StatusPublisher
+from voicecontrol.events.status import StatusEvent, StatusPublisher, StatusType
+from voicecontrol.events.status_snapshot import RuntimeStatusSnapshotStore
 from voicecontrol.utils import autostart
 
 if TYPE_CHECKING:
@@ -99,6 +100,7 @@ class TrayApp:
         self._recording_stop_event = threading.Event()
         self._status_speech = None
         self._status_unsubscribe = None
+        self._status_snapshot_store = RuntimeStatusSnapshotStore()
         self._is_recording = False
         self._icon = Icon(
             "VoiceControl",
@@ -153,9 +155,11 @@ class TrayApp:
         elif command == PAUSE_LISTENING:
             self._paused.set()
             self._icon.title = "VoiceControl — 已暂停"
+            self._publish_runtime_status(StatusType.PAUSED, "paused")
         elif command == RESUME_LISTENING:
             self._paused.clear()
             self._icon.title = "VoiceControl — 监听中"
+            self._publish_runtime_status(StatusType.LISTENING, "listening")
 
     def _on_open_settings(self, _icon: Icon, _item: object) -> None:
         try:
@@ -184,6 +188,17 @@ class TrayApp:
 
     def _on_status_event(self, event: StatusEvent) -> None:
         self._set_stage(event.type.value)
+        self._write_runtime_status_event(event)
+
+    def _write_runtime_status_event(self, event: StatusEvent) -> None:
+        store = getattr(self, "_status_snapshot_store", None)
+        if store is not None:
+            store.handle_event(event)
+
+    def _publish_runtime_status(self, event_type: StatusType, message: str = "") -> None:
+        store = getattr(self, "_status_snapshot_store", None)
+        if store is not None:
+            store.publish(event_type, message=message)
 
     def _subscribe_status_events(self, publisher: StatusPublisher) -> None:
         self._close_status_subscription()
@@ -226,12 +241,8 @@ class TrayApp:
     def _control_worker(self) -> None:
         while not self._stop_event.is_set():
             command = read_control_command()
-            if command == START_RECORDING:
-                logger.info("Manual recording requested from control command.")
-                self._handle_control_command(command)
-                self._icon.update_menu()
-            elif command == STOP_RECORDING:
-                logger.info("Manual recording stop requested from control command.")
+            if command in {START_RECORDING, STOP_RECORDING, PAUSE_LISTENING, RESUME_LISTENING}:
+                logger.info("Control command received: %s.", command)
                 self._handle_control_command(command)
                 self._icon.update_menu()
             self._stop_event.wait(timeout=0.25)
