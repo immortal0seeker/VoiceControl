@@ -50,7 +50,7 @@ The editable install registers the `voicecontrol` package so
 | Wake word engine | openWakeWord (ONNX/onnxruntime); built-in `hey_jarvis` or bundled custom `world_activate.onnx` — wake word only gates activation; commands stay Chinese |
 | TTS | Windows SAPI via `pywin32` (`tts/speaker.py`); short **status phrases** on pipeline events (not full read-back of Codex replies) |
 | Background mode | Tray app via `pythonw`, launch-at-logon through HKCU Run key. NOT a Windows Service (session 0 cannot drive the desktop) |
-| Inter-process control | File-based commands in `logs/control_command.json` (start/stop recording, pause/resume listening) consumed by tray daemon |
+| Inter-process control | File-based commands in `logs/runtime/control_command.json` (start/stop recording, pause/resume listening) consumed by tray daemon |
 
 ---
 
@@ -62,11 +62,12 @@ Hotkey trigger              F9 start/stop (default loop), Esc quit
 VAD auto-stop               --vad flag on hotkey loop
 Wake word + tray daemon     --wake (foreground) or pythonw -m voicecontrol.tray_app
 Codex Desktop executor      focus → click composer → paste → Enter; optional auto-launch
-Settings UI (PySide6)       python -m voicecontrol.ui.settings_app  (also from tray menu)
+Control center (PySide6)    python -m voicecontrol.ui.settings_app  (also from tray menu / tray double-click)
 Launch at logon             tray menu toggle (HKCU Run)
 TTS status cues             "我在" / "请说" / "正在识别" / … on pipeline status events
-Command history             append-only JSONL under logs/command_history.jsonl
-Diagnostics                 mic / VAD / wake-word tests in settings UI
+Runtime status              JSON snapshot under logs/runtime/runtime_status.json
+Command history             append-only JSONL under logs/history/command_history.jsonl
+Diagnostics                 mic / VAD / wake-word / TTS / Codex-send tests in settings UI
 Manual recording            tray menu or settings UI → file control command → skip wake word
 Custom wake word            bundled world_activate.onnx selectable in config.json / settings UI
 ```
@@ -78,6 +79,7 @@ always-on tray daemon → openWakeWord hears wake word → beep cue (+ optional 
 → record command (VAD auto-stop; F9 or tray can stop early)
 → transcribe → send to Codex → history + done cue (+ optional TTS "已发送")
 tray menu: pause/resume · start/stop recording · open settings · toggle launch-at-logon · quit
+tray double-click: open settings/control center
 ```
 
 Run commands (PowerShell):
@@ -86,10 +88,11 @@ Run commands (PowerShell):
 .venv\Scripts\python.exe -m voicecontrol.main --wake          # foreground debug
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
 .venv\Scripts\pythonw.exe -m voicecontrol.tray_app             # headless tray daemon
-.venv\Scripts\python.exe -m voicecontrol.ui.settings_app      # settings / diagnostics UI
+.venv\Scripts\python.exe -m voicecontrol.ui.settings_app      # control center UI
 ```
 
-Logs (tray mode): `logs/YYYYMMDD_voicecontrol.log` (one file per calendar day).
+Logs (tray mode): `logs/tray/YYYYMMDD_voicecontrol.log` (one file per calendar day).
+Control center navigation: Recording, Settings, Diagnostics, Command History, Logs.
 
 ---
 
@@ -105,8 +108,11 @@ VoiceControl/
 ├── .venv/
 ├── config.json                 user-facing JSON config (merged over defaults)
 ├── audio_files/                recordings/  temp/  samples/   (debug audio, git-ignored)
-├── logs/                       daily tray logs, command_history.jsonl, diagnostics.jsonl,
-│                               control_command.json (git-ignored)
+├── logs/                       tray/, history/, diagnostics/, runtime/ (git-ignored)
+│   ├── tray/                   daily tray logs
+│   ├── history/                command_history.jsonl
+│   ├── diagnostics/            diagnostics.jsonl
+│   └── runtime/                runtime_status.json, control_command.json
 ├── pyproject.toml              package definition (src-layout, console script, package-data)
 ├── src/voicecontrol/
 │   ├── main.py                 CLI entry: --once / --vad / --wake / --no-send
@@ -119,11 +125,11 @@ VoiceControl/
 │   ├── pipeline/               orchestrator (VoiceOrchestrator, run_wake_loop)
 │   ├── config/                 settings.py, manager.py
 │   ├── control/                file-based commands for tray daemon
-│   ├── events/                 status publisher (pipeline → tray / TTS / UI)
+│   ├── events/                 status publisher + runtime status snapshot
 │   ├── history/                command history store + resend
-│   ├── diagnostics/            mic / VAD / wake-word tests, log reader, diagnostic result store
+│   ├── diagnostics/            mic / VAD / wake-word / TTS / Codex-send tests, log reader, diagnostic result store
 │   ├── tts/                    Windows SAPI speaker + status speech subscriber
-│   ├── ui/                     PySide6 settings/diagnostics UI
+│   ├── ui/                     PySide6 control center UI
 │   │   ├── settings_app.py     QApplication entry point
 │   │   ├── settings_window.py  navigation shell (sidebar + QStackedWidget)
 │   │   ├── config_binding.py   config read/write helpers + Binding type
@@ -155,11 +161,11 @@ Module boundaries (keep responsibilities separate):
 - `pipeline/` — orchestrate the slices; call lower modules, don't reimplement them.
 - `config/` — defaults in `settings.py`; user overrides in `config.json` via `manager.py`.
 - `control/` — file-based IPC commands consumed by the tray daemon.
-- `events/` — in-process status pub/sub shared by pipeline, tray, TTS, settings UI.
+- `events/` — in-process status pub/sub plus file-backed runtime status shared by pipeline, tray, TTS, settings UI.
 - `history/` — append-only command history; resend last command from settings UI.
-- `diagnostics/` — self-test helpers surfaced in the settings UI.
+- `diagnostics/` — mic, VAD, wake-word, TTS, and Codex-send self-tests surfaced in the settings UI.
 - `tts/` — Windows SAPI wrapper and status-phrase subscriber only.
-- `ui/` — PySide6 settings/diagnostics window; no pipeline logic.
+- `ui/` — PySide6 control center window; no pipeline logic.
 - `utils/` — only code that fits nowhere else.
 
 ---

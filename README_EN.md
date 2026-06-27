@@ -41,9 +41,12 @@ The first run downloads Whisper and openWakeWord models; an internet connection 
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-You can also launch it from the tray menu (**Open settings**), in a separate process.
+You can also launch it from the tray menu (**Open settings**) or by double-clicking
+the tray icon, in a separate process.
 
-The UI reads and writes root `config.json`. **Restart the tray/listener** after saving. Pages include status, recording control, settings, TTS, mic/VAD/wake-word diagnostics, command history, logs, and background control.
+The UI reads and writes root `config.json`. **Restart the tray/listener** after saving.
+The control center uses five sidebar pages: recording/status controls, settings
+(including TTS), diagnostics, command history, and logs.
 
 ### Daily use (tray daemon, recommended)
 
@@ -59,7 +62,8 @@ A **V** tray icon appears (loads `ui/assets/app_icon.png` when available). Right
 - Toggle launch-at-logon
 - Quit
 
-Logs: `logs\YYYYMMDD_voicecontrol.log` (one file per calendar day)
+Double-clicking the tray icon opens the settings/control-center UI. Tray logs live
+at `logs\tray\YYYYMMDD_voicecontrol.log` (one file per calendar day).
 
 When TTS is enabled, short status phrases are spoken on pipeline events (e.g. “我在”, “请说”, “正在识别”, “已发送”).
 
@@ -101,7 +105,8 @@ Say the wake word (default **“hey jarvis”** in English, or select **world_ac
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
 
-The settings UI also offers mic, VAD, and wake-word file tests plus recent log viewing.
+The settings UI also offers mic, VAD, wake-word file, TTS, and Codex-send tests
+plus recent log viewing.
 
 ## Configuration
 
@@ -135,14 +140,18 @@ src/voicecontrol/
 ├── wake_word/        openWakeWord + models/world_activate.onnx
 ├── executor/         Codex window focus + paste
 ├── pipeline/         Orchestration & status events
-├── control/          Tray file commands (logs/control_command.json)
-├── events/           Status pub/sub
+├── control/          Tray file commands (logs/runtime/control_command.json)
+├── events/           Status pub/sub + runtime status snapshot
 ├── history/          Command history JSONL
 ├── diagnostics/      Self-test helpers
 ├── tts/              Windows SAPI status speech
-├── ui/               PySide6 settings / diagnostics UI
+├── ui/               PySide6 control center UI
 └── utils/            Beeps, launch-at-logon, hotkeys
-logs/                 Daily logs, command_history.jsonl, diagnostics.jsonl
+logs/
+├── tray/             Daily tray logs (YYYYMMDD_voicecontrol.log)
+├── history/          command_history.jsonl
+├── diagnostics/      diagnostics.jsonl
+└── runtime/          runtime_status.json, control_command.json
 ```
 
 ## Feature status
@@ -152,11 +161,12 @@ logs/                 Daily logs, command_history.jsonl, diagnostics.jsonl
 - Microphone capture and faster-whisper transcription (Chinese / English)
 - Hotkey trigger (F9 start/stop) and VAD auto-stop on silence
 - Wake word (`hey_jarvis` / bundled `world_activate`) plus system-tray background daemon
-- Tray manual recording, pause/resume, launch-at-logon toggle
+- Tray manual recording, pause/resume, launch-at-logon toggle, and double-click settings
 - Auto-focus Codex Desktop and paste commands; optional Codex auto-launch
-- PySide6 settings & diagnostics UI backed by `config.json`
+- PySide6 control center backed by `config.json`
 - Windows SAPI pipeline status TTS (short phrases)
-- Command history (`logs/command_history.jsonl`) and resend last command
+- Runtime status snapshot (`logs/runtime/runtime_status.json`) polled by the recording page
+- Command history (`logs/history/command_history.jsonl`) and resend last command
 
 **Planned**
 

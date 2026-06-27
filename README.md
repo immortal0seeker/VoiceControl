@@ -41,9 +41,9 @@ python -m venv .venv
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-也可从托盘右键菜单 **「打开设置」** 启动（独立进程）。
+也可从托盘右键菜单 **「打开设置」** 或双击托盘图标启动（独立进程）。
 
-设置页读写根目录 `config.json`，保存后**重启托盘/监听进程**生效。页面包括：状态、录音控制、参数设置、TTS、麦克风/VAD/唤醒词诊断、命令历史、日志、后台控制。
+设置页读写根目录 `config.json`，保存后**重启托盘/监听进程**生效。控制中心左侧导航包括 5 页：录音/状态控制、设置（含 TTS）、诊断、命令历史、日志查看。
 
 ### 日常使用（托盘后台，推荐）
 
@@ -59,7 +59,7 @@ python -m venv .venv
 - 开关开机自启
 - 退出
 
-日志：`logs\YYYYMMDD_voicecontrol.log`（按日一个文件）
+双击托盘图标会打开设置/控制中心。托盘日志：`logs\tray\YYYYMMDD_voicecontrol.log`（按日一个文件）。
 
 启用 TTS 时，流水线状态会播报短句（如「我在」「请说」「正在识别」「已发送」）。
 
@@ -101,7 +101,7 @@ python -m venv .venv
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
 
-设置 UI 内也提供麦克风、VAD、唤醒词文件测试与近期日志查看。
+设置 UI 内也提供麦克风、VAD、唤醒词文件、TTS、Codex 发送测试与近期日志查看。
 
 ## 配置
 
@@ -135,14 +135,18 @@ src/voicecontrol/
 ├── wake_word/        openWakeWord + models/world_activate.onnx
 ├── executor/         Codex 窗口聚焦 + 粘贴
 ├── pipeline/         流程编排、状态事件
-├── control/          托盘文件命令（logs/control_command.json）
-├── events/           状态 pub/sub
+├── control/          托盘文件命令（logs/runtime/control_command.json）
+├── events/           状态 pub/sub + runtime 状态快照
 ├── history/          命令历史 JSONL
 ├── diagnostics/      自测工具
 ├── tts/              Windows SAPI 状态播报
-├── ui/               PySide6 设置 / 诊断界面
+├── ui/               PySide6 控制中心界面
 └── utils/            蜂鸣、开机自启、热键
-logs/                 按日日志、command_history.jsonl、diagnostics.jsonl
+logs/
+├── tray/             按日托盘日志（YYYYMMDD_voicecontrol.log）
+├── history/          command_history.jsonl
+├── diagnostics/      diagnostics.jsonl
+└── runtime/          runtime_status.json、control_command.json
 ```
 
 ## 功能状态
@@ -152,11 +156,12 @@ logs/                 按日日志、command_history.jsonl、diagnostics.jsonl
 - 麦克风录音与 faster-whisper 语音转写（中/英）
 - 热键触发（F9 开始/停止）与 VAD 静音自动停录
 - 唤醒词（`hey_jarvis` / 捆绑 `world_activate`）+ 系统托盘后台常驻
-- 托盘手动录音、暂停/恢复、开机自启
+- 托盘手动录音、暂停/恢复、开机自启、双击打开设置
 - 自动聚焦 Codex Desktop 并粘贴命令；可选自动启动 Codex
-- PySide6 设置与诊断 UI（`config.json`）
+- PySide6 控制中心（`config.json`）
 - Windows SAPI 流水线状态 TTS（短句）
-- 命令历史（`logs/command_history.jsonl`）与重发上一条
+- runtime 状态快照（`logs/runtime/runtime_status.json`），录音页每秒刷新
+- 命令历史（`logs/history/command_history.jsonl`）与重发上一条
 
 **计划中**
 
