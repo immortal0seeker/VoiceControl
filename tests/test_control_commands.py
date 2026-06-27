@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 
 from voicecontrol.control.commands import (
+    PAUSE_LISTENING,
+    RESUME_LISTENING,
     START_RECORDING,
     STOP_RECORDING,
     read_control_command,
@@ -37,6 +39,16 @@ class ControlCommandTests(unittest.TestCase):
             write_control_command(STOP_RECORDING, path)
 
             self.assertEqual(read_control_command(path), STOP_RECORDING)
+
+    def test_pause_and_resume_listening_commands_are_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "command.json"
+
+            write_control_command(PAUSE_LISTENING, path)
+            self.assertEqual(read_control_command(path), PAUSE_LISTENING)
+
+            write_control_command(RESUME_LISTENING, path)
+            self.assertEqual(read_control_command(path), RESUME_LISTENING)
 
     def test_stale_command_is_ignored_and_consumed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

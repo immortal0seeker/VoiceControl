@@ -19,7 +19,13 @@ from PIL import Image, ImageDraw
 from pystray import Icon, Menu, MenuItem
 
 from voicecontrol.config import settings
-from voicecontrol.control.commands import START_RECORDING, STOP_RECORDING, read_control_command
+from voicecontrol.control.commands import (
+    PAUSE_LISTENING,
+    RESUME_LISTENING,
+    START_RECORDING,
+    STOP_RECORDING,
+    read_control_command,
+)
 from voicecontrol.events.status import StatusEvent, StatusPublisher
 from voicecontrol.utils import autostart
 
@@ -144,6 +150,12 @@ class TrayApp:
         elif command == STOP_RECORDING:
             self._recording_stop_event.set()
             self._is_recording = False
+        elif command == PAUSE_LISTENING:
+            self._paused.set()
+            self._icon.title = "VoiceControl — 已暂停"
+        elif command == RESUME_LISTENING:
+            self._paused.clear()
+            self._icon.title = "VoiceControl — 监听中"
 
     def _on_open_settings(self, _icon: Icon, _item: object) -> None:
         try:

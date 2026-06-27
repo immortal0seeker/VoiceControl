@@ -1,14 +1,31 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton, QStackedWidget, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QStackedWidget,
+    QTableWidget,
+    QWidget,
+)
 
 from voicecontrol.config.manager import load_config
+from voicecontrol.control.commands import PAUSE_LISTENING, RESUME_LISTENING, START_RECORDING, STOP_RECORDING
+from voicecontrol.diagnostics.store import DiagnosticResult
+from voicecontrol.events.status import StatusPublisher, StatusType
+from voicecontrol.history.resend import ResendResult
+from voicecontrol.history.store import CommandHistoryRecord, append_command_history
 from voicecontrol.ui.settings_window import SettingsWindow
 
 
@@ -36,6 +53,37 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         settings_button.click()
 
         self.assertEqual(stack.currentWidget(), settings_page)
+
+    def test_window_exposes_control_center_navigation_pages(self) -> None:
+        window = SettingsWindow(load_config())
+        stack = window.findChild(QStackedWidget, "pageStack")
+
+        pages = [
+            ("navStatus", "statusPage"),
+            ("navRecording", "recordingPage"),
+            ("navSettings", "settingsPage"),
+            ("navTts", "ttsPage"),
+            ("navMicrophoneDiagnostics", "microphoneDiagnosticsPage"),
+            ("navVadTest", "vadTestPage"),
+            ("navWakeWordTest", "wakeWordTestPage"),
+            ("navCommandHistory", "commandHistoryPage"),
+            ("navLogs", "logsPage"),
+            ("navBackgroundControl", "backgroundControlPage"),
+        ]
+
+        self.assertIsNotNone(stack)
+        for nav_name, page_name in pages:
+            with self.subTest(nav=nav_name, page=page_name):
+                button = window.findChild(QPushButton, nav_name)
+                page = window.findChild(QWidget, page_name)
+
+                self.assertIsNotNone(button)
+                self.assertIsNotNone(page)
+
+                button.click()
+
+                self.assertEqual(stack.currentWidget(), page)
+                self.assertTrue(button.isChecked())
 
     def test_window_allows_null_max_record_seconds_config(self) -> None:
         config = load_config()
@@ -70,6 +118,221 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             button.click()
 
         speaker_class.return_value.speak.assert_called_once_with("我在")
+
+    def test_status_page_updates_from_injected_status_publisher(self) -> None:
+        publisher = StatusPublisher()
+        window = SettingsWindow(load_config(), status_publisher=publisher)
+
+        current = window.findChild(QLabel, "currentStatusLabel")
+        recent = window.findChild(QLabel, "recentStatusEventsLabel")
+        recording = window.findChild(QLabel, "isRecordingLabel")
+        sending = window.findChild(QLabel, "isSendingLabel")
+        error = window.findChild(QLabel, "lastErrorLabel")
+
+        publisher.publish(StatusType.RECORDING, message="recording now")
+
+        self.assertIn("recording", current.text())
+        self.assertIn("是", recording.text())
+
+        publisher.publish(StatusType.SENDING, message="sending to Codex")
+
+        self.assertIn("sending", current.text())
+        self.assertIn("否", recording.text())
+        self.assertIn("是", sending.text())
+
+        publisher.publish(StatusType.ERROR, message="window not found")
+
+        self.assertIn("error", current.text())
+        self.assertIn("recording now", recent.text())
+        self.assertIn("sending to Codex", recent.text())
+        self.assertIn("window not found", recent.text())
+        self.assertIn("window not found", error.text())
+
+    def test_command_history_page_loads_records_and_refreshes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "command_history.jsonl"
+            append_command_history(
+                CommandHistoryRecord(
+                    text="打开项目",
+                    wav_path=Path("audio_files/one.wav"),
+                    sent=True,
+                    created_at=datetime(2026, 6, 27, 9, 30, 0),
+                ),
+                path=history_path,
+            )
+            window = SettingsWindow(load_config(), command_history_path=history_path)
+            table = window.findChild(QTableWidget, "commandHistoryTable")
+            refresh = window.findChild(QPushButton, "refreshCommandHistoryButton")
+
+            self.assertEqual(table.rowCount(), 1)
+            self.assertEqual(table.item(0, 1).text(), "打开项目")
+            self.assertEqual(table.item(0, 3).text(), "是")
+
+            append_command_history(
+                CommandHistoryRecord(
+                    text="失败命令",
+                    wav_path=Path("audio_files/two.wav"),
+                    sent=False,
+                    send_error="Codex window not found",
+                    error="send failed",
+                    created_at=datetime(2026, 6, 27, 9, 31, 0),
+                ),
+                path=history_path,
+            )
+
+            refresh.click()
+
+            self.assertEqual(table.rowCount(), 2)
+            self.assertEqual(table.item(1, 1).text(), "失败命令")
+            self.assertEqual(table.item(1, 3).text(), "否")
+            self.assertEqual(table.item(1, 4).text(), "Codex window not found")
+            self.assertEqual(table.item(1, 5).text(), "send failed")
+
+    def test_command_history_page_resends_last_command_and_shows_result(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "command_history.jsonl"
+            window = SettingsWindow(load_config(), command_history_path=history_path)
+            button = window.findChild(QPushButton, "resendLastCommandButton")
+            result = window.findChild(QLabel, "resendLastCommandResultLabel")
+
+            with patch("voicecontrol.ui.settings_window.resend_last_command") as resend:
+                resend.return_value = ResendResult(text="打开项目", sent=True)
+                button.click()
+
+            resend.assert_called_once_with(history_path=history_path)
+            self.assertIn("已重发", result.text())
+            self.assertIn("打开项目", result.text())
+
+    def test_command_history_page_shows_resend_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "command_history.jsonl"
+            window = SettingsWindow(load_config(), command_history_path=history_path)
+            button = window.findChild(QPushButton, "resendLastCommandButton")
+            result = window.findChild(QLabel, "resendLastCommandResultLabel")
+
+            with patch("voicecontrol.ui.settings_window.resend_last_command") as resend:
+                resend.return_value = ResendResult(text="打开项目", sent=False, send_error="Codex window not found")
+                button.click()
+
+            self.assertIn("重发失败", result.text())
+            self.assertIn("Codex window not found", result.text())
+
+    def test_logs_page_shows_recent_log_lines_and_refreshes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "voicecontrol.log"
+            log_path.write_text("first\nsecond\n", encoding="utf-8")
+            window = SettingsWindow(load_config(), log_path=log_path)
+            text = window.findChild(QPlainTextEdit, "recentLogLinesText")
+            refresh = window.findChild(QPushButton, "refreshLogsButton")
+
+            self.assertIn("first", text.toPlainText())
+            self.assertIn("second", text.toPlainText())
+
+            log_path.write_text("third\nfourth\n", encoding="utf-8")
+            refresh.click()
+
+            self.assertNotIn("first", text.toPlainText())
+            self.assertIn("third", text.toPlainText())
+            self.assertIn("fourth", text.toPlainText())
+
+    def test_logs_page_shows_empty_state_for_missing_log(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "missing.log"
+            window = SettingsWindow(load_config(), log_path=log_path)
+            text = window.findChild(QPlainTextEdit, "recentLogLinesText")
+
+            self.assertIn("暂无日志", text.toPlainText())
+
+    def test_diagnostic_pages_call_services_and_show_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            diagnostic_path = Path(temp_dir) / "diagnostics.jsonl"
+            window = SettingsWindow(load_config(), diagnostic_path=diagnostic_path)
+
+            mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
+            mic_result = window.findChild(QLabel, "microphoneDiagnosticResultLabel")
+            vad_path = window.findChild(QLineEdit, "vadTestFilePath")
+            vad_button = window.findChild(QPushButton, "runVadTestButton")
+            vad_result = window.findChild(QLabel, "vadTestResultLabel")
+            wake_path = window.findChild(QLineEdit, "wakeWordTestFilePath")
+            wake_button = window.findChild(QPushButton, "runWakeWordTestButton")
+            wake_result = window.findChild(QLabel, "wakeWordTestResultLabel")
+
+            with (
+                patch("voicecontrol.ui.settings_window.run_microphone_test") as microphone,
+                patch("voicecontrol.ui.settings_window.run_vad_file_test") as vad,
+                patch("voicecontrol.ui.settings_window.run_wake_word_file_test") as wake_word,
+            ):
+                microphone.return_value = DiagnosticResult(name="microphone", status="ok", details={"rms": 0.25})
+                vad.return_value = DiagnosticResult(name="vad", status="ok", details={"finished": True})
+                wake_word.return_value = DiagnosticResult(
+                    name="wake_word",
+                    status="ok",
+                    details={"max_score": 0.8, "detected": True},
+                )
+
+                mic_button.click()
+                vad_path.setText("sample_vad.wav")
+                vad_button.click()
+                wake_path.setText("sample_wake.wav")
+                wake_button.click()
+
+            microphone.assert_called_once_with(diagnostic_path=diagnostic_path)
+            vad.assert_called_once_with("sample_vad.wav", diagnostic_path=diagnostic_path)
+            wake_word.assert_called_once_with("sample_wake.wav", diagnostic_path=diagnostic_path)
+            self.assertIn("ok", mic_result.text())
+            self.assertIn("rms", mic_result.text())
+            self.assertIn("ok", vad_result.text())
+            self.assertIn("finished", vad_result.text())
+            self.assertIn("ok", wake_result.text())
+            self.assertIn("max_score", wake_result.text())
+
+    def test_diagnostic_page_shows_failure_result(self) -> None:
+        window = SettingsWindow(load_config())
+        mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
+        mic_result = window.findChild(QLabel, "microphoneDiagnosticResultLabel")
+
+        with patch("voicecontrol.ui.settings_window.run_microphone_test") as microphone:
+            microphone.return_value = DiagnosticResult(name="microphone", status="error", error="mic unavailable")
+            mic_button.click()
+
+        self.assertIn("error", mic_result.text())
+        self.assertIn("mic unavailable", mic_result.text())
+
+    def test_background_control_buttons_call_services(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "command_history.jsonl"
+            log_path = Path(temp_dir) / "voicecontrol.log"
+            window = SettingsWindow(load_config(), command_history_path=history_path, log_path=log_path)
+            result = window.findChild(QLabel, "backgroundControlResultLabel")
+
+            buttons = {
+                "pause": window.findChild(QPushButton, "pauseListeningButton"),
+                "resume": window.findChild(QPushButton, "resumeListeningButton"),
+                "start": window.findChild(QPushButton, "backgroundStartRecordingButton"),
+                "stop": window.findChild(QPushButton, "backgroundStopRecordingButton"),
+                "tts": window.findChild(QPushButton, "backgroundTestTtsButton"),
+                "send": window.findChild(QPushButton, "testSendToCodexButton"),
+                "logs": window.findChild(QPushButton, "openLogsLocationButton"),
+                "history": window.findChild(QPushButton, "openHistoryLocationButton"),
+            }
+
+            with (
+                patch("voicecontrol.ui.settings_window.write_control_command") as write_command,
+                patch("voicecontrol.ui.settings_window.TextSpeaker") as speaker_class,
+                patch("voicecontrol.ui.settings_window.CodexDriver") as driver_class,
+                patch("voicecontrol.ui.settings_window.os.startfile") as startfile,
+            ):
+                for button in buttons.values():
+                    button.click()
+
+            self.assertEqual(
+                [call.args[0] for call in write_command.call_args_list],
+                [PAUSE_LISTENING, RESUME_LISTENING, START_RECORDING, STOP_RECORDING],
+            )
+            speaker_class.return_value.speak.assert_called_once()
+            driver_class.return_value.send_prompt.assert_called_once()
+            self.assertEqual(startfile.call_count, 2)
+            self.assertIn("已打开", result.text())
 
 
 if __name__ == "__main__":

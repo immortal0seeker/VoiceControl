@@ -11,8 +11,10 @@ from voicecontrol.config import settings
 
 START_RECORDING = "start_recording"
 STOP_RECORDING = "stop_recording"
-VALID_COMMANDS = {START_RECORDING, STOP_RECORDING}
-ControlCommand = Literal["start_recording", "stop_recording"]
+PAUSE_LISTENING = "pause_listening"
+RESUME_LISTENING = "resume_listening"
+VALID_COMMANDS = {START_RECORDING, STOP_RECORDING, PAUSE_LISTENING, RESUME_LISTENING}
+ControlCommand = Literal["start_recording", "stop_recording", "pause_listening", "resume_listening"]
 
 CONTROL_COMMAND_PATH = settings.LOG_DIR / "control_command.json"
 

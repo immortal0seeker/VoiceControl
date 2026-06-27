@@ -42,8 +42,7 @@ def apple_style_sheet() -> str:
         font-weight: 700;
         background: transparent;
     }
-    QPushButton#navRecording,
-    QPushButton#navSettings {
+    QPushButton[navButton="true"] {
         background: transparent;
         color: #1d1d1f;
         border: none;
@@ -52,12 +51,10 @@ def apple_style_sheet() -> str:
         text-align: left;
         font-weight: 600;
     }
-    QPushButton#navRecording:hover,
-    QPushButton#navSettings:hover {
+    QPushButton[navButton="true"]:hover {
         background: #e1e1e6;
     }
-    QPushButton#navRecording:checked,
-    QPushButton#navSettings:checked {
+    QPushButton[navButton="true"]:checked {
         background: #d8e9ff;
         color: #0057c2;
     }

@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock
 
 from voicecontrol import tray_app
+from voicecontrol.control.commands import PAUSE_LISTENING, RESUME_LISTENING
 from voicecontrol.events.status import StatusPublisher, StatusType
 
 
@@ -67,6 +68,16 @@ class TrayRecordingControlTests(unittest.TestCase):
         app._handle_control_command("stop_recording")
         self.assertTrue(app._recording_stop_event.is_set())
         self.assertFalse(app._is_recording)
+
+    def test_control_command_pause_and_resume_update_listening_state(self) -> None:
+        app = self._app()
+        app._paused = threading.Event()
+
+        app._handle_control_command(PAUSE_LISTENING)
+        self.assertTrue(app._paused.is_set())
+
+        app._handle_control_command(RESUME_LISTENING)
+        self.assertFalse(app._paused.is_set())
 
     def test_status_events_update_tray_recording_state_and_title(self) -> None:
         app = self._app()

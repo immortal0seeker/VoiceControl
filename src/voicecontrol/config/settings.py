@@ -114,6 +114,7 @@ TTS_VOICE: str | None = None
 # Foreground CLI (main.py) logs to the console only; it does not use log_file_path().
 LOG_DIR: Path = PROJECT_ROOT / "logs"
 COMMAND_HISTORY_PATH: Path = LOG_DIR / "command_history.jsonl"
+DIAGNOSTICS_HISTORY_PATH: Path = LOG_DIR / "diagnostics.jsonl"
 
 
 def log_file_path() -> Path:

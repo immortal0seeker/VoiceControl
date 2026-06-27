@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import Qt
@@ -12,22 +14,43 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from voicecontrol.control.commands import START_RECORDING, STOP_RECORDING, write_control_command
+from voicecontrol.config import settings
+from voicecontrol.control.commands import (
+    PAUSE_LISTENING,
+    RESUME_LISTENING,
+    START_RECORDING,
+    STOP_RECORDING,
+    write_control_command,
+)
 from voicecontrol.config.manager import ConfigError, load_config, save_config
+from voicecontrol.diagnostics.logs import read_recent_log_lines
+from voicecontrol.diagnostics.microphone import run_microphone_test
+from voicecontrol.diagnostics.store import DiagnosticResult
+from voicecontrol.diagnostics.vad import run_vad_file_test
+from voicecontrol.diagnostics.wake_word import run_wake_word_file_test
+from voicecontrol.events.status import StatusEvent, StatusPublisher, StatusType, default_status_publisher
+from voicecontrol.executor.codex_driver import CodexDriver
+from voicecontrol.executor.window_utils import WindowError
+from voicecontrol.history.resend import ResendError, resend_last_command
+from voicecontrol.history.store import read_command_history
 from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.assets import asset_path
 from voicecontrol.ui.widgets import add_row, card, combo, double_spin, int_spin, line_edit, switch
 from voicecontrol.wake_word.models import available_wake_word_models
 
 Binding = tuple[tuple[str, ...], Callable[[], Any]]
+NavPage = tuple[str, str, str, Callable[[], QWidget]]
 
 
 def _get_nested(config: dict[str, Any], path: tuple[str, ...]) -> Any:
@@ -56,14 +79,31 @@ def _register(bindings: list[Binding], path: tuple[str, ...], reader: Callable[[
 class SettingsWindow(QMainWindow):
     """Apple-style settings window backed by root config.json."""
 
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        config: dict[str, Any],
+        status_publisher: StatusPublisher | None = None,
+        command_history_path: str | Path | None = None,
+        log_path: str | Path | None = None,
+        diagnostic_path: str | Path | None = None,
+    ) -> None:
         super().__init__()
         self._config = config
         self._bindings: list[Binding] = []
+        self._status_publisher = status_publisher or default_status_publisher
+        self._command_history_path = Path(command_history_path) if command_history_path is not None else None
+        self._log_path = Path(log_path) if log_path is not None else None
+        self._diagnostic_path = Path(diagnostic_path) if diagnostic_path is not None else None
+        self._status_unsubscribe: Callable[[], None] | None = None
+        self._recent_status_events: list[StatusEvent] = []
+        self._is_recording = False
+        self._is_sending = False
+        self._last_error = ""
         self.setWindowTitle("VoiceControl Settings")
         self.setWindowIcon(QIcon(str(asset_path("app_icon.svg"))))
         self.resize(940, 720)
         self._build_ui()
+        self._status_unsubscribe = self._status_publisher.subscribe(self._handle_status_event)
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -71,12 +111,7 @@ class SettingsWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        self._recording_nav = QPushButton("Recording")
-        self._recording_nav.setObjectName("navRecording")
-        self._settings_nav = QPushButton("Settings")
-        self._settings_nav.setObjectName("navSettings")
-        for button in (self._recording_nav, self._settings_nav):
-            button.setCheckable(True)
+        self._nav_buttons: list[QPushButton] = []
 
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
@@ -89,24 +124,280 @@ class SettingsWindow(QMainWindow):
         brand.setObjectName("sidebarTitle")
         sidebar_layout.addWidget(brand)
         sidebar_layout.addSpacing(16)
-        sidebar_layout.addWidget(self._recording_nav)
-        sidebar_layout.addWidget(self._settings_nav)
-        sidebar_layout.addStretch(1)
 
         self._page_stack = QStackedWidget()
         self._page_stack.setObjectName("pageStack")
-        self._recording_page = self._build_recording_page()
-        self._settings_page = self._build_settings_page()
-        self._page_stack.addWidget(self._recording_page)
-        self._page_stack.addWidget(self._settings_page)
 
-        self._recording_nav.clicked.connect(lambda: self._show_page(0))
-        self._settings_nav.clicked.connect(lambda: self._show_page(1))
-        self._show_page(0)
+        nav_pages: list[NavPage] = [
+            ("状态", "navStatus", "statusPage", self._build_status_page),
+            ("录音", "navRecording", "recordingPage", self._build_recording_page),
+            ("设置", "navSettings", "settingsPage", self._build_settings_page),
+            ("TTS", "navTts", "ttsPage", lambda: self._build_placeholder_page("TTS", "TTS 控制会显示在这里。")),
+            (
+                "麦克风诊断",
+                "navMicrophoneDiagnostics",
+                "microphoneDiagnosticsPage",
+                self._build_microphone_diagnostics_page,
+            ),
+            ("VAD 测试", "navVadTest", "vadTestPage", self._build_vad_test_page),
+            (
+                "唤醒词测试",
+                "navWakeWordTest",
+                "wakeWordTestPage",
+                self._build_wake_word_test_page,
+            ),
+            (
+                "命令历史",
+                "navCommandHistory",
+                "commandHistoryPage",
+                self._build_command_history_page,
+            ),
+            ("日志查看", "navLogs", "logsPage", self._build_logs_page),
+            (
+                "后台控制",
+                "navBackgroundControl",
+                "backgroundControlPage",
+                self._build_background_control_page,
+            ),
+        ]
+
+        for index, (label, object_name, page_name, factory) in enumerate(nav_pages):
+            button = QPushButton(label)
+            button.setObjectName(object_name)
+            button.setProperty("navButton", True)
+            button.setCheckable(True)
+            button.clicked.connect(lambda _checked=False, page_index=index: self._show_page(page_index))
+            self._nav_buttons.append(button)
+            sidebar_layout.addWidget(button)
+            page = factory()
+            page.setObjectName(page_name)
+            self._page_stack.addWidget(page)
+
+        sidebar_layout.addStretch(1)
+        self._show_page(1)
 
         root_layout.addWidget(sidebar, 0)
         root_layout.addWidget(self._page_stack, 1)
         self.setCentralWidget(root)
+
+    def _build_status_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = QVBoxLayout(page)
+        root_layout.setContentsMargins(36, 30, 36, 28)
+        root_layout.setSpacing(0)
+
+        title = QLabel("状态")
+        title.setObjectName("title")
+        title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        root_layout.addWidget(title)
+
+        subtitle = QLabel("查看助手当前运行状态和最近事件。")
+        subtitle.setObjectName("subtitle")
+        root_layout.addWidget(subtitle)
+
+        frame, layout = card("当前状态")
+        self._current_status_label = QLabel("当前状态：未收到事件")
+        self._current_status_label.setObjectName("currentStatusLabel")
+        self._is_recording_label = QLabel("录音中：否")
+        self._is_recording_label.setObjectName("isRecordingLabel")
+        self._is_sending_label = QLabel("发送中：否")
+        self._is_sending_label.setObjectName("isSendingLabel")
+        self._last_error_label = QLabel("最近错误：无")
+        self._last_error_label.setObjectName("lastErrorLabel")
+        self._recent_status_events_label = QLabel("暂无状态事件。")
+        self._recent_status_events_label.setObjectName("recentStatusEventsLabel")
+        self._recent_status_events_label.setWordWrap(True)
+
+        layout.addWidget(self._current_status_label)
+        layout.addWidget(self._is_recording_label)
+        layout.addWidget(self._is_sending_label)
+        layout.addWidget(self._last_error_label)
+        layout.addWidget(self._recent_status_events_label)
+        root_layout.addWidget(frame)
+        root_layout.addStretch(1)
+        return page
+
+    def _build_command_history_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = QVBoxLayout(page)
+        root_layout.setContentsMargins(36, 30, 36, 28)
+        root_layout.setSpacing(0)
+
+        title = QLabel("命令历史")
+        title.setObjectName("title")
+        title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        root_layout.addWidget(title)
+
+        subtitle = QLabel("查看最近的语音命令、录音文件和发送结果。")
+        subtitle.setObjectName("subtitle")
+        root_layout.addWidget(subtitle)
+
+        refresh_button = QPushButton("刷新")
+        refresh_button.setObjectName("refreshCommandHistoryButton")
+        resend_button = QPushButton("重发上一条")
+        resend_button.setObjectName("resendLastCommandButton")
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 12)
+        actions.setSpacing(12)
+        actions.addStretch(1)
+        actions.addWidget(resend_button)
+        actions.addWidget(refresh_button)
+        root_layout.addLayout(actions)
+
+        self._resend_last_command_result_label = QLabel("")
+        self._resend_last_command_result_label.setObjectName("resendLastCommandResultLabel")
+        self._resend_last_command_result_label.setWordWrap(True)
+        root_layout.addWidget(self._resend_last_command_result_label)
+
+        self._command_history_table = QTableWidget(0, 6)
+        self._command_history_table.setObjectName("commandHistoryTable")
+        self._command_history_table.setHorizontalHeaderLabels(["时间", "文本", "WAV", "已发送", "发送错误", "错误"])
+        self._command_history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._command_history_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._command_history_table.horizontalHeader().setStretchLastSection(True)
+        root_layout.addWidget(self._command_history_table, 1)
+
+        refresh_button.clicked.connect(self._load_command_history)
+        resend_button.clicked.connect(self._resend_last_command)
+        self._load_command_history()
+        return page
+
+    def _build_logs_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = QVBoxLayout(page)
+        root_layout.setContentsMargins(36, 30, 36, 28)
+        root_layout.setSpacing(0)
+
+        title = QLabel("日志查看")
+        title.setObjectName("title")
+        title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        root_layout.addWidget(title)
+
+        subtitle = QLabel("查看最近的后台运行日志。")
+        subtitle.setObjectName("subtitle")
+        root_layout.addWidget(subtitle)
+
+        refresh_button = QPushButton("刷新")
+        refresh_button.setObjectName("refreshLogsButton")
+        root_layout.addWidget(refresh_button, 0, Qt.AlignmentFlag.AlignRight)
+
+        self._recent_log_lines_text = QPlainTextEdit()
+        self._recent_log_lines_text.setObjectName("recentLogLinesText")
+        self._recent_log_lines_text.setReadOnly(True)
+        root_layout.addWidget(self._recent_log_lines_text, 1)
+
+        refresh_button.clicked.connect(self._load_recent_logs)
+        self._load_recent_logs()
+        return page
+
+    def _build_microphone_diagnostics_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = self._page_layout(page, "麦克风诊断", "录制短音频并检查输入电平。")
+
+        run_button = QPushButton("开始测试")
+        run_button.setObjectName("runMicrophoneDiagnosticButton")
+        self._microphone_diagnostic_result_label = QLabel("尚未运行。")
+        self._microphone_diagnostic_result_label.setObjectName("microphoneDiagnosticResultLabel")
+        self._microphone_diagnostic_result_label.setWordWrap(True)
+        root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
+        root_layout.addWidget(self._microphone_diagnostic_result_label)
+        root_layout.addStretch(1)
+
+        run_button.clicked.connect(self._run_microphone_diagnostic)
+        return page
+
+    def _build_vad_test_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = self._page_layout(page, "VAD 测试", "选择 WAV 文件并检查端点检测结果。")
+
+        self._vad_test_file_path = line_edit("", "WAV 文件路径")
+        self._vad_test_file_path.setObjectName("vadTestFilePath")
+        run_button = QPushButton("运行 VAD 测试")
+        run_button.setObjectName("runVadTestButton")
+        self._vad_test_result_label = QLabel("尚未运行。")
+        self._vad_test_result_label.setObjectName("vadTestResultLabel")
+        self._vad_test_result_label.setWordWrap(True)
+        root_layout.addWidget(self._vad_test_file_path)
+        root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
+        root_layout.addWidget(self._vad_test_result_label)
+        root_layout.addStretch(1)
+
+        run_button.clicked.connect(self._run_vad_test)
+        return page
+
+    def _build_wake_word_test_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = self._page_layout(page, "唤醒词测试", "选择 WAV 文件并检查唤醒词得分。")
+
+        self._wake_word_test_file_path = line_edit("", "WAV 文件路径")
+        self._wake_word_test_file_path.setObjectName("wakeWordTestFilePath")
+        run_button = QPushButton("运行唤醒词测试")
+        run_button.setObjectName("runWakeWordTestButton")
+        self._wake_word_test_result_label = QLabel("尚未运行。")
+        self._wake_word_test_result_label.setObjectName("wakeWordTestResultLabel")
+        self._wake_word_test_result_label.setWordWrap(True)
+        root_layout.addWidget(self._wake_word_test_file_path)
+        root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
+        root_layout.addWidget(self._wake_word_test_result_label)
+        root_layout.addStretch(1)
+
+        run_button.clicked.connect(self._run_wake_word_test)
+        return page
+
+    def _build_background_control_page(self) -> QWidget:
+        page = QWidget()
+        root_layout = self._page_layout(page, "后台控制", "控制托盘监听流程并运行轻量测试。")
+
+        buttons = [
+            ("暂停监听", "pauseListeningButton", lambda: self._send_control_command(PAUSE_LISTENING, "已请求暂停监听。")),
+            ("恢复监听", "resumeListeningButton", lambda: self._send_control_command(RESUME_LISTENING, "已请求恢复监听。")),
+            ("开始录音", "backgroundStartRecordingButton", lambda: self._send_control_command(START_RECORDING, "已请求开始录音。")),
+            ("停止录音", "backgroundStopRecordingButton", lambda: self._send_control_command(STOP_RECORDING, "已请求停止录音。")),
+            ("测试 TTS", "backgroundTestTtsButton", self._background_test_tts),
+            ("测试发送到 Codex", "testSendToCodexButton", self._background_test_send_to_codex),
+            ("打开日志位置", "openLogsLocationButton", lambda: self._open_location(self._log_path or settings.log_file_path())),
+            (
+                "打开历史位置",
+                "openHistoryLocationButton",
+                lambda: self._open_location(self._command_history_path or settings.COMMAND_HISTORY_PATH),
+            ),
+        ]
+
+        for label, object_name, handler in buttons:
+            button = QPushButton(label)
+            button.setObjectName(object_name)
+            button.clicked.connect(handler)
+            root_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignLeft)
+
+        self._background_control_result_label = QLabel("尚未执行。")
+        self._background_control_result_label.setObjectName("backgroundControlResultLabel")
+        self._background_control_result_label.setWordWrap(True)
+        root_layout.addWidget(self._background_control_result_label)
+        root_layout.addStretch(1)
+        return page
+
+    def _build_placeholder_page(self, title_text: str, empty_text: str) -> QWidget:
+        page = QWidget()
+        page.setObjectName("")
+        root_layout = self._page_layout(page, title_text, empty_text)
+        root_layout.addStretch(1)
+        return page
+
+    def _page_layout(self, page: QWidget, title_text: str, subtitle_text: str) -> QVBoxLayout:
+        root_layout = QVBoxLayout(page)
+        root_layout.setContentsMargins(36, 30, 36, 28)
+        root_layout.setSpacing(0)
+
+        title = QLabel(title_text)
+        title.setObjectName("title")
+        title.setFont(QFont("Segoe UI", 26, QFont.Weight.Bold))
+        root_layout.addWidget(title)
+
+        empty = QLabel(subtitle_text)
+        empty.setObjectName("subtitle")
+        root_layout.addWidget(empty)
+        return root_layout
 
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
@@ -174,8 +465,136 @@ class SettingsWindow(QMainWindow):
 
     def _show_page(self, index: int) -> None:
         self._page_stack.setCurrentIndex(index)
-        self._recording_nav.setChecked(index == 0)
-        self._settings_nav.setChecked(index == 1)
+        for button_index, button in enumerate(self._nav_buttons):
+            button.setChecked(button_index == index)
+
+    def _handle_status_event(self, event: StatusEvent) -> None:
+        self._recent_status_events.append(event)
+        self._recent_status_events = self._recent_status_events[-8:]
+        self._is_recording = event.type == StatusType.RECORDING
+        self._is_sending = event.type == StatusType.SENDING
+        if event.type == StatusType.ERROR:
+            self._last_error = event.message or "未知错误"
+        self._render_status_page(event)
+
+    def _render_status_page(self, current_event: StatusEvent) -> None:
+        self._current_status_label.setText(f"当前状态：{current_event.type.value}")
+        self._is_recording_label.setText(f"录音中：{'是' if self._is_recording else '否'}")
+        self._is_sending_label.setText(f"发送中：{'是' if self._is_sending else '否'}")
+        self._last_error_label.setText(f"最近错误：{self._last_error or '无'}")
+        lines = []
+        for event in self._recent_status_events:
+            message = f" - {event.message}" if event.message else ""
+            lines.append(f"{event.created_at:%H:%M:%S} {event.type.value}{message}")
+        self._recent_status_events_label.setText("\n".join(lines) if lines else "暂无状态事件。")
+
+    def _load_command_history(self) -> None:
+        records = read_command_history(path=self._command_history_path)
+        self._command_history_table.setRowCount(len(records))
+        for row, record in enumerate(records):
+            values = [
+                record.created_at.isoformat(timespec="seconds"),
+                record.text,
+                record.wav_path.as_posix(),
+                "是" if record.sent else "否",
+                record.send_error or "",
+                record.error or "",
+            ]
+            for column, value in enumerate(values):
+                self._command_history_table.setItem(row, column, QTableWidgetItem(value))
+        self._command_history_table.resizeColumnsToContents()
+
+    def _resend_last_command(self) -> None:
+        try:
+            result = resend_last_command(history_path=self._command_history_path)
+        except ResendError as exc:
+            self._resend_last_command_result_label.setText(f"重发失败：{exc}")
+            return
+
+        if result.sent:
+            self._resend_last_command_result_label.setText(f"已重发：{result.text}")
+        else:
+            self._resend_last_command_result_label.setText(f"重发失败：{result.send_error or '未知错误'}")
+        self._load_command_history()
+
+    def _load_recent_logs(self) -> None:
+        lines = read_recent_log_lines(path=self._log_path)
+        self._recent_log_lines_text.setPlainText("\n".join(lines) if lines else "暂无日志。")
+
+    def _run_microphone_diagnostic(self) -> None:
+        result = run_microphone_test(diagnostic_path=self._diagnostic_path)
+        self._microphone_diagnostic_result_label.setText(self._format_diagnostic_result(result))
+
+    def _run_vad_test(self) -> None:
+        wav_path = self._vad_test_file_path.text().strip()
+        if not wav_path:
+            self._vad_test_result_label.setText("error：请先填写 WAV 文件路径。")
+            return
+        result = run_vad_file_test(wav_path, diagnostic_path=self._diagnostic_path)
+        self._vad_test_result_label.setText(self._format_diagnostic_result(result))
+
+    def _run_wake_word_test(self) -> None:
+        wav_path = self._wake_word_test_file_path.text().strip()
+        if not wav_path:
+            self._wake_word_test_result_label.setText("error：请先填写 WAV 文件路径。")
+            return
+        result = run_wake_word_file_test(wav_path, diagnostic_path=self._diagnostic_path)
+        self._wake_word_test_result_label.setText(self._format_diagnostic_result(result))
+
+    def _format_diagnostic_result(self, result: DiagnosticResult) -> str:
+        details = ", ".join(f"{key}={value}" for key, value in result.details.items())
+        parts = [result.status]
+        if details:
+            parts.append(details)
+        if result.error:
+            parts.append(result.error)
+        return "：".join(parts)
+
+    def _send_control_command(self, command: str, success_message: str) -> None:
+        try:
+            write_control_command(command)
+        except Exception as exc:
+            self._background_control_result_label.setText(f"失败：{exc}")
+            return
+        self._background_control_result_label.setText(success_message)
+
+    def _background_test_tts(self) -> None:
+        try:
+            tts_config = self._config.get("tts", {})
+            TextSpeaker(
+                enabled=True,
+                rate=int(tts_config.get("rate", 0)),
+                volume=int(tts_config.get("volume", 100)),
+                voice=tts_config.get("voice"),
+            ).speak("我在")
+        except (TtsError, ValueError, TypeError) as exc:
+            self._background_control_result_label.setText(f"TTS 测试失败：{exc}")
+            return
+        self._background_control_result_label.setText("TTS 测试已发送。")
+
+    def _background_test_send_to_codex(self) -> None:
+        try:
+            CodexDriver().send_prompt("这是一条来自 VoiceControl 控制中心的测试消息。")
+        except WindowError as exc:
+            self._background_control_result_label.setText(f"发送测试失败：{exc}")
+            return
+        self._background_control_result_label.setText("发送测试已提交。")
+
+    def _open_location(self, path: Path) -> None:
+        directory = path if path.is_dir() else path.parent
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            os.startfile(str(directory))
+        except OSError as exc:
+            self._background_control_result_label.setText(f"打开位置失败：{exc}")
+            return
+        self._background_control_result_label.setText(f"已打开：{directory}")
+
+    def closeEvent(self, event: Any) -> None:
+        if self._status_unsubscribe is not None:
+            self._status_unsubscribe()
+            self._status_unsubscribe = None
+        super().closeEvent(event)
 
     def _footer(self) -> QHBoxLayout:
         footer = QHBoxLayout()
