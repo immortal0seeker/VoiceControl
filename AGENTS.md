@@ -57,12 +57,13 @@ The editable install registers the `voicecontrol` package so
 ## 3. Shipped Features
 
 ```text
-Single-shot recording       python -m voicecontrol.main --once
-Hotkey trigger              F9 start/stop (default loop), Esc quit
+Debug CLI recording         python -m voicecontrol.main --once
+Debug CLI hotkey trigger    F9 start/stop (default loop), Esc quit
 VAD auto-stop               --vad flag on hotkey loop
 Wake word + tray daemon     --wake (foreground) or pythonw -m voicecontrol.tray_app
 Codex Desktop executor      focus → click composer → paste → Enter; optional auto-launch
 Control center (PySide6)    python -m voicecontrol.ui.settings_app  (also from tray menu / tray double-click)
+Desktop pet (PySide6)       pythonw -m voicecontrol.ui.desktop_pet_app
 Launch at logon             tray menu toggle (HKCU Run)
 TTS status cues             "我在" / "请说" / "正在识别" / … on pipeline status events
 Runtime status              JSON snapshot under logs/runtime/runtime_status.json
@@ -89,10 +90,12 @@ Run commands (PowerShell):
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
 .venv\Scripts\pythonw.exe -m voicecontrol.tray_app             # headless tray daemon
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app      # control center UI
+.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app  # desktop pet
 ```
 
 Logs (tray mode): `logs/tray/YYYYMMDD_voicecontrol.log` (one file per calendar day).
 Control center navigation: Recording, Settings, Diagnostics, Command History, Logs.
+`main.py` is a foreground debug CLI; use `tray_app.py` for daily background mode.
 
 ---
 
@@ -130,6 +133,9 @@ VoiceControl/
 │   ├── diagnostics/            mic / VAD / wake-word / TTS / Codex-send tests, log reader, diagnostic result store
 │   ├── tts/                    Windows SAPI speaker + status speech subscriber
 │   ├── ui/                     PySide6 control center UI
+│   │   ├── desktop_pet.py      transparent always-on-top desktop pet window
+│   │   ├── desktop_pet_app.py  desktop pet QApplication entry point
+│   │   ├── launcher.py         small UI process launch helpers
 │   │   ├── settings_app.py     QApplication entry point
 │   │   ├── settings_window.py  navigation shell (sidebar + QStackedWidget)
 │   │   ├── config_binding.py   config read/write helpers + Binding type

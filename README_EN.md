@@ -67,7 +67,22 @@ at `logs\tray\YYYYMMDD_voicecontrol.log` (one file per calendar day).
 
 When TTS is enabled, short status phrases are spoken on pipeline events (e.g. “我在”, “请说”, “正在识别”, “已发送”).
 
+### Desktop pet status window
+
+```powershell
+.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
+```
+
+The desktop pet is a minimal transparent always-on-top floating window. Drag it
+to reposition it, left-click it to open the control center, or right-click it to
+open the control center or quit. It polls `logs\runtime\runtime_status.json`
+every second and switches text expressions for listening, recording, sending,
+and error states.
+
 ### Foreground debug (console output)
+
+`main.py` is now the developer/debug CLI. Daily use should prefer the tray
+daemon.
 
 ```powershell
 # Wake-word mode
@@ -146,6 +161,8 @@ src/voicecontrol/
 ├── diagnostics/      Self-test helpers
 ├── tts/              Windows SAPI status speech
 ├── ui/               PySide6 control center UI
+│   ├── desktop_pet.py     Desktop pet floating window
+│   └── desktop_pet_app.py Desktop pet entry point
 └── utils/            Beeps, launch-at-logon, hotkeys
 logs/
 ├── tray/             Daily tray logs (YYYYMMDD_voicecontrol.log)
@@ -167,6 +184,7 @@ logs/
 - Windows SAPI pipeline status TTS (short phrases)
 - Runtime status snapshot (`logs/runtime/runtime_status.json`) polled by the recording page
 - Command history (`logs/history/command_history.jsonl`) and resend last command
+- Minimal desktop pet floating window with transparent topmost drag, click-to-open control center, and runtime status text expressions
 
 **Planned**
 

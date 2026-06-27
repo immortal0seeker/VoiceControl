@@ -1,4 +1,8 @@
-"""VoiceControl CLI entry point.
+"""VoiceControl foreground debug CLI entry point.
+
+Daily background use should start ``voicecontrol.tray_app``. This module is
+kept as a developer/debug fallback for exercising the pipeline without the tray
+shell or desktop pet.
 
 Modes (mutually exclusive unless noted):
     --once      single fixed-duration recording, then transcribe (+ send)

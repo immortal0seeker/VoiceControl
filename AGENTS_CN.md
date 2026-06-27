@@ -59,12 +59,13 @@ pip install -e .
 ## 3. 已交付功能
 
 ```text
-单次录音            python -m voicecontrol.main --once
-热键触发            F9 开始/停止（默认循环），Esc 退出
+调试 CLI 单次录音   python -m voicecontrol.main --once
+调试 CLI 热键触发   F9 开始/停止（默认循环），Esc 退出
 VAD 自动停录        热键循环加 --vad
 唤醒词 + 托盘       --wake（前台）或 pythonw -m voicecontrol.tray_app
 Codex 发送          聚焦 → 点输入框 → 粘贴 → Enter；可选自动启动 Codex
 控制中心 (PySide6)  python -m voicecontrol.ui.settings_app（托盘菜单 / 双击托盘也可打开）
+桌面宠物 (PySide6)  pythonw -m voicecontrol.ui.desktop_pet_app
 开机自启            托盘菜单开关（HKCU Run）
 TTS 状态播报        「我在」「请说」「正在识别」… 随流水线状态触发
 runtime 状态        logs/runtime/runtime_status.json 状态快照
@@ -91,10 +92,12 @@ runtime 状态        logs/runtime/runtime_status.json 状态快照
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
 .venv\Scripts\pythonw.exe -m voicecontrol.tray_app             # 无控制台托盘后台
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app      # 控制中心界面
+.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app  # 桌宠
 ```
 
 日志（托盘模式）：`logs/tray/YYYYMMDD_voicecontrol.log`（按自然日一个文件）。
 控制中心导航：录音、设置、诊断、命令历史、日志查看。
+`main.py` 是前台调试 CLI；日常后台模式使用 `tray_app.py`。
 
 ---
 
@@ -132,6 +135,9 @@ VoiceControl/
 │   ├── diagnostics/            麦克风 / VAD / 唤醒词 / TTS / Codex 发送测试、日志读取、诊断结果存储
 │   ├── tts/                    Windows SAPI 播报 + 状态订阅
 │   ├── ui/                     PySide6 控制中心 UI
+│   │   ├── desktop_pet.py      透明置顶桌宠悬浮窗
+│   │   ├── desktop_pet_app.py  桌宠 QApplication 入口
+│   │   ├── launcher.py         小型 UI 进程启动辅助
 │   │   ├── settings_app.py     QApplication 入口
 │   │   ├── settings_window.py  导航壳（侧栏 + QStackedWidget）
 │   │   ├── config_binding.py   配置读写辅助 + Binding 类型

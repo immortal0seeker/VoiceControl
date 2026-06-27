@@ -63,7 +63,17 @@ python -m venv .venv
 
 启用 TTS 时，流水线状态会播报短句（如「我在」「请说」「正在识别」「已发送」）。
 
+### 桌面宠物状态窗
+
+```powershell
+.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
+```
+
+桌宠是最小透明置顶悬浮窗：可拖动，左键点击打开控制中心，右键可打开控制中心或退出。它每秒读取 `logs\runtime\runtime_status.json`，根据监听、录音、发送、出错等状态切换文字表情。
+
 ### 前台调试（有控制台输出）
+
+`main.py` 现在定位为开发调试 CLI，日常使用优先启动托盘。
 
 ```powershell
 # 唤醒词模式
@@ -141,6 +151,8 @@ src/voicecontrol/
 ├── diagnostics/      自测工具
 ├── tts/              Windows SAPI 状态播报
 ├── ui/               PySide6 控制中心界面
+│   ├── desktop_pet.py     桌宠悬浮窗
+│   └── desktop_pet_app.py 桌宠启动入口
 └── utils/            蜂鸣、开机自启、热键
 logs/
 ├── tray/             按日托盘日志（YYYYMMDD_voicecontrol.log）
@@ -162,6 +174,7 @@ logs/
 - Windows SAPI 流水线状态 TTS（短句）
 - runtime 状态快照（`logs/runtime/runtime_status.json`），录音页每秒刷新
 - 命令历史（`logs/history/command_history.jsonl`）与重发上一条
+- 桌宠最小悬浮窗：透明置顶、可拖动、点击打开控制中心、根据 runtime 状态切换文字表情
 
 **计划中**
 
