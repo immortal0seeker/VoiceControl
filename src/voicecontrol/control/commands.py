@@ -16,7 +16,7 @@ RESUME_LISTENING = "resume_listening"
 VALID_COMMANDS = {START_RECORDING, STOP_RECORDING, PAUSE_LISTENING, RESUME_LISTENING}
 ControlCommand = Literal["start_recording", "stop_recording", "pause_listening", "resume_listening"]
 
-CONTROL_COMMAND_PATH = settings.LOG_DIR / "control_command.json"
+CONTROL_COMMAND_PATH = settings.RUNTIME_DIR / "control_command.json"
 
 
 def write_control_command(

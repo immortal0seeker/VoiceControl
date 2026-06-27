@@ -49,9 +49,9 @@ _STAGE_TITLES = {
 
 
 def _configure_logging() -> None:
-    # Background (tray) mode: logs go to a daily file under LOG_DIR (no console with pythonw).
+    # Background (tray) mode: logs go to a daily file under TRAY_LOG_DIR (no console with pythonw).
     # Foreground CLI (main.py) logs to the console instead; see main.main().
-    settings.LOG_DIR.mkdir(parents=True, exist_ok=True)
+    settings.TRAY_LOG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -109,7 +109,7 @@ class TrayApp:
             menu=Menu(
                 MenuItem(self._pause_label, self._on_toggle_pause),
                 MenuItem(self._recording_label, self._on_toggle_recording),
-                MenuItem("打开设置", self._on_open_settings),
+                MenuItem("打开设置", self._on_open_settings, default=True),
                 MenuItem(
                     "开机自启",
                     self._on_toggle_autostart,

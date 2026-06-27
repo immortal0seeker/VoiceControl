@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PySide6.QtGui import QFont
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from voicecontrol.config import settings
 from voicecontrol.history.resend import ResendError, resend_last_command
 from voicecontrol.history.store import read_command_history
 
@@ -44,11 +46,14 @@ class CommandHistoryPage(QWidget):
         refresh_button.setObjectName("refreshCommandHistoryButton")
         resend_button = QPushButton("重发上一条")
         resend_button.setObjectName("resendLastCommandButton")
+        open_button = QPushButton("打开历史位置")
+        open_button.setObjectName("openHistoryLocationButton")
 
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 12)
         actions.setSpacing(12)
         actions.addStretch(1)
+        actions.addWidget(open_button)
         actions.addWidget(resend_button)
         actions.addWidget(refresh_button)
         root_layout.addLayout(actions)
@@ -70,6 +75,7 @@ class CommandHistoryPage(QWidget):
 
         refresh_button.clicked.connect(self._load_command_history)
         resend_button.clicked.connect(self._resend_last_command)
+        open_button.clicked.connect(self._open_history_location)
         self._load_command_history()
 
     def _load_command_history(self) -> None:
@@ -102,3 +108,9 @@ class CommandHistoryPage(QWidget):
                 f"重发失败：{result.send_error or '未知错误'}"
             )
         self._load_command_history()
+
+    def _open_history_location(self) -> None:
+        path = self._command_history_path or settings.COMMAND_HISTORY_PATH
+        directory = path if path.is_dir() else path.parent
+        directory.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(directory))

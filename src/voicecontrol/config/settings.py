@@ -110,18 +110,22 @@ TTS_VOLUME: int = 100
 TTS_VOICE: str | None = None
 
 # --- Logging / tray daemon -------------------------------------------------
-# Background (tray) mode: one log file per day under LOG_DIR (pythonw has no console).
+# Background (tray) mode: one log file per day under TRAY_LOG_DIR (pythonw has no console).
 # Foreground CLI (main.py) logs to the console only; it does not use log_file_path().
 LOG_DIR: Path = PROJECT_ROOT / "logs"
-COMMAND_HISTORY_PATH: Path = LOG_DIR / "command_history.jsonl"
-DIAGNOSTICS_HISTORY_PATH: Path = LOG_DIR / "diagnostics.jsonl"
-RUNTIME_STATUS_PATH: Path = LOG_DIR / "runtime_status.json"
+TRAY_LOG_DIR: Path = LOG_DIR / "tray"
+HISTORY_DIR: Path = LOG_DIR / "history"
+DIAGNOSTICS_DIR: Path = LOG_DIR / "diagnostics"
+RUNTIME_DIR: Path = LOG_DIR / "runtime"
+COMMAND_HISTORY_PATH: Path = HISTORY_DIR / "command_history.jsonl"
+DIAGNOSTICS_HISTORY_PATH: Path = DIAGNOSTICS_DIR / "diagnostics.jsonl"
+RUNTIME_STATUS_PATH: Path = RUNTIME_DIR / "runtime_status.json"
 
 
 def log_file_path() -> Path:
     """Return today's log file path (one file per calendar day, append on restart)."""
     day = datetime.now().strftime("%Y%m%d")
-    return LOG_DIR / f"{day}_voicecontrol.log"
+    return TRAY_LOG_DIR / f"{day}_voicecontrol.log"
 
 # --- Autostart -------------------------------------------------------------
 # Registry value name under HKCU...\Run used to toggle launch-at-logon.

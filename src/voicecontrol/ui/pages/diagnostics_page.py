@@ -7,16 +7,27 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from voicecontrol.diagnostics.microphone import run_microphone_test
 from voicecontrol.diagnostics.store import DiagnosticResult
 from voicecontrol.diagnostics.vad import run_vad_file_test
 from voicecontrol.diagnostics.wake_word import run_wake_word_file_test
+from voicecontrol.executor.codex_driver import CodexDriver
+from voicecontrol.executor.window_utils import WindowError
+from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.pages.base import page_layout
 from voicecontrol.ui.widgets import card, line_edit
 
 logger = logging.getLogger(__name__)
+
+
+def _make_selectable(label: QLabel) -> QLabel:
+    label.setTextInteractionFlags(
+        Qt.TextInteractionFlag.TextSelectableByMouse
+        | Qt.TextInteractionFlag.TextSelectableByKeyboard
+    )
+    return label
 
 
 def _format_diagnostic_result(result: DiagnosticResult) -> str:
@@ -41,7 +52,7 @@ class MicrophoneDiagnosticsPage(QWidget):
 
         run_button = QPushButton("开始测试")
         run_button.setObjectName("runMicrophoneDiagnosticButton")
-        self._result_label = QLabel("尚未运行。")
+        self._result_label = _make_selectable(QLabel("尚未运行。"))
         self._result_label.setObjectName("microphoneDiagnosticResultLabel")
         self._result_label.setWordWrap(True)
         root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
@@ -69,7 +80,7 @@ class VadTestPage(QWidget):
         self._file_path.setObjectName("vadTestFilePath")
         run_button = QPushButton("运行 VAD 测试")
         run_button.setObjectName("runVadTestButton")
-        self._result_label = QLabel("尚未运行。")
+        self._result_label = _make_selectable(QLabel("尚未运行。"))
         self._result_label.setObjectName("vadTestResultLabel")
         self._result_label.setWordWrap(True)
         root_layout.addWidget(self._file_path)
@@ -102,7 +113,7 @@ class WakeWordTestPage(QWidget):
         self._file_path.setObjectName("wakeWordTestFilePath")
         run_button = QPushButton("运行唤醒词测试")
         run_button.setObjectName("runWakeWordTestButton")
-        self._result_label = QLabel("尚未运行。")
+        self._result_label = _make_selectable(QLabel("尚未运行。"))
         self._result_label.setObjectName("wakeWordTestResultLabel")
         self._result_label.setWordWrap(True)
         root_layout.addWidget(self._file_path)
@@ -124,24 +135,39 @@ class WakeWordTestPage(QWidget):
 class DiagnosticsPage(QWidget):
     """Combined diagnostics page for microphone, VAD, and wake-word checks."""
 
-    def __init__(self, diagnostic_path: Path | None = None) -> None:
+    def __init__(self, diagnostic_path: Path | None = None, config: dict | None = None) -> None:
         super().__init__()
         self.setObjectName("diagnosticsPage")
         self._diagnostic_path = diagnostic_path
+        self._config = config or {}
 
         root_layout = page_layout(self, "诊断", "集中运行麦克风、VAD 和唤醒词测试。")
         root_layout.setSpacing(16)
-        self._add_microphone_card(root_layout)
-        self._add_vad_card(root_layout)
-        self._add_wake_word_card(root_layout)
-        root_layout.addStretch(1)
+        scroll = QScrollArea()
+        scroll.setObjectName("diagnosticsScrollArea")
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(16)
+        self._add_microphone_card(content_layout)
+        self._add_vad_card(content_layout)
+        self._add_wake_word_card(content_layout)
+        self._add_tts_card(content_layout)
+        self._add_codex_card(content_layout)
+        content_layout.addStretch(1)
+
+        scroll.setWidget(content)
+        root_layout.addWidget(scroll, 1)
 
     def _add_microphone_card(self, root_layout: QVBoxLayout) -> None:
         frame, layout = card("麦克风")
         run_button = QPushButton("开始测试")
         run_button.setObjectName("runMicrophoneDiagnosticButton")
         self._microphone_run_button = run_button
-        self._microphone_result_label = QLabel("尚未运行。")
+        self._microphone_result_label = _make_selectable(QLabel("尚未运行。"))
         self._microphone_result_label.setObjectName("microphoneDiagnosticResultLabel")
         self._microphone_result_label.setWordWrap(True)
         layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
@@ -156,7 +182,7 @@ class DiagnosticsPage(QWidget):
         run_button = QPushButton("运行 VAD 测试")
         run_button.setObjectName("runVadTestButton")
         self._vad_run_button = run_button
-        self._vad_result_label = QLabel("尚未运行。")
+        self._vad_result_label = _make_selectable(QLabel("尚未运行。"))
         self._vad_result_label.setObjectName("vadTestResultLabel")
         self._vad_result_label.setWordWrap(True)
         layout.addWidget(self._vad_file_path)
@@ -172,7 +198,7 @@ class DiagnosticsPage(QWidget):
         run_button = QPushButton("运行唤醒词测试")
         run_button.setObjectName("runWakeWordTestButton")
         self._wake_word_run_button = run_button
-        self._wake_word_result_label = QLabel("尚未运行。")
+        self._wake_word_result_label = _make_selectable(QLabel("尚未运行。"))
         self._wake_word_result_label.setObjectName("wakeWordTestResultLabel")
         self._wake_word_result_label.setWordWrap(True)
         layout.addWidget(self._wake_word_file_path)
@@ -180,6 +206,30 @@ class DiagnosticsPage(QWidget):
         layout.addWidget(self._wake_word_result_label)
         root_layout.addWidget(frame)
         run_button.clicked.connect(self._run_wake_word)
+
+    def _add_tts_card(self, root_layout: QVBoxLayout) -> None:
+        frame, layout = card("TTS 状态提示")
+        run_button = QPushButton("测试 TTS")
+        run_button.setObjectName("backgroundTestTtsButton")
+        self._tts_result_label = _make_selectable(QLabel("尚未运行。"))
+        self._tts_result_label.setObjectName("ttsDiagnosticResultLabel")
+        self._tts_result_label.setWordWrap(True)
+        layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._tts_result_label)
+        root_layout.addWidget(frame)
+        run_button.clicked.connect(self._run_tts)
+
+    def _add_codex_card(self, root_layout: QVBoxLayout) -> None:
+        frame, layout = card("Codex 发送")
+        run_button = QPushButton("测试发送到 Codex")
+        run_button.setObjectName("testSendToCodexButton")
+        self._codex_result_label = _make_selectable(QLabel("尚未运行。"))
+        self._codex_result_label.setObjectName("codexSendDiagnosticResultLabel")
+        self._codex_result_label.setWordWrap(True)
+        layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._codex_result_label)
+        root_layout.addWidget(frame)
+        run_button.clicked.connect(self._run_codex_send)
 
     def _run_microphone(self) -> None:
         self._run_diagnostic(
@@ -209,6 +259,28 @@ class DiagnosticsPage(QWidget):
             self._wake_word_result_label,
             lambda: run_wake_word_file_test(wav_path, diagnostic_path=self._diagnostic_path),
         )
+
+    def _run_tts(self) -> None:
+        try:
+            tts_config = self._config.get("tts", {})
+            TextSpeaker(
+                enabled=True,
+                rate=int(tts_config.get("rate", 0)),
+                volume=int(tts_config.get("volume", 100)),
+                voice=tts_config.get("voice"),
+            ).speak("我在")
+        except (TtsError, ValueError, TypeError) as exc:
+            self._tts_result_label.setText(f"TTS 测试失败：{exc}")
+            return
+        self._tts_result_label.setText("TTS 测试已发送。")
+
+    def _run_codex_send(self) -> None:
+        try:
+            CodexDriver().send_prompt("这是一条来自 VoiceControl 控制中心的测试消息。")
+        except WindowError as exc:
+            self._codex_result_label.setText(f"发送测试失败：{exc}")
+            return
+        self._codex_result_label.setText("发送测试已提交。")
 
     def _run_diagnostic(
         self,

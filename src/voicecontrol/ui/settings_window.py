@@ -23,14 +23,11 @@ from PySide6.QtWidgets import (
 
 from voicecontrol.events.status import StatusEvent, StatusPublisher, default_status_publisher
 from voicecontrol.ui.assets import asset_path
-from voicecontrol.ui.pages.background_page import BackgroundControlPage
 from voicecontrol.ui.pages.command_history_page import CommandHistoryPage
 from voicecontrol.ui.pages.diagnostics_page import DiagnosticsPage
 from voicecontrol.ui.pages.logs_page import LogsPage
-from voicecontrol.ui.pages.recording_page import RecordingPage
 from voicecontrol.ui.pages.settings_page import SettingsPage
 from voicecontrol.ui.pages.status_page import StatusPage
-from voicecontrol.ui.pages.base import PlaceholderPage
 
 
 class SettingsWindow(QMainWindow):
@@ -90,26 +87,15 @@ class SettingsWindow(QMainWindow):
         self._status_page = StatusPage(runtime_status_path=self._runtime_status_path)
 
         nav_pages: list[tuple[str, str, QWidget]] = [
-            ("状态", "navStatus", self._status_page),
-            ("录音", "navRecording", RecordingPage()),
+            ("录音", "navRecording", self._status_page),
             ("设置", "navSettings", SettingsPage(self._config)),
-            ("TTS", "navTts", PlaceholderPage("TTS", "TTS 控制会显示在这里。", "ttsPage")),
-            ("诊断", "navDiagnostics", DiagnosticsPage(self._diagnostic_path)),
+            ("诊断", "navDiagnostics", DiagnosticsPage(self._diagnostic_path, self._config)),
             (
                 "命令历史",
                 "navCommandHistory",
                 CommandHistoryPage(self._command_history_path),
             ),
             ("日志查看", "navLogs", LogsPage(self._log_path)),
-            (
-                "后台控制",
-                "navBackgroundControl",
-                BackgroundControlPage(
-                    config=self._config,
-                    log_path=self._log_path,
-                    command_history_path=self._command_history_path,
-                ),
-            ),
         ]
 
         for index, (label, object_name, page) in enumerate(nav_pages):
@@ -125,7 +111,7 @@ class SettingsWindow(QMainWindow):
             self._page_stack.addWidget(page)
 
         sidebar_layout.addStretch(1)
-        self._show_page(1)
+        self._show_page(0)
 
         root_layout.addWidget(sidebar, 0)
         root_layout.addWidget(self._page_stack, 1)
