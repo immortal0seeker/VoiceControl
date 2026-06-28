@@ -226,19 +226,19 @@ class SettingsPage(QWidget):
                 "chatgpt_window_title",
                 "chatgpt_launch_command",
                 "ChatGPT",
-                "composer_click_rel_x",
-                "composer_click_rel_y",
-                "composerClickRelX",
-                "composerClickRelY",
+                None,
+                None,
+                "shortcutFocusRelX",
+                "shortcutFocusRelY",
             ),
             "cursor": (
                 "cursor_window_title",
                 "cursor_launch_command",
                 "Cursor",
-                "composer_click_rel_x",
-                "composer_click_rel_y",
-                "composerClickRelX",
-                "composerClickRelY",
+                None,
+                None,
+                "shortcutFocusRelX",
+                "shortcutFocusRelY",
             ),
             "trae": (
                 "trae_window_title",
@@ -290,13 +290,21 @@ class SettingsPage(QWidget):
             get_nested(self._config, ("executor", "click_composer_before_paste"))
         )
         click_x = double_spin(
-            get_nested(self._config, ("executor", click_x_key)), 0.0, 1.0, 0.05
+            get_nested(self._config, ("executor", click_x_key)) if click_x_key else 0.0,
+            0.0,
+            1.0,
+            0.05,
         )
         click_x.setObjectName(click_x_object_name)
         click_y = double_spin(
-            get_nested(self._config, ("executor", click_y_key)), 0.0, 1.0, 0.05
+            get_nested(self._config, ("executor", click_y_key)) if click_y_key else 0.0,
+            0.0,
+            1.0,
+            0.05,
         )
         click_y.setObjectName(click_y_object_name)
+        click_x.setEnabled(click_x_key is not None)
+        click_y.setEnabled(click_y_key is not None)
 
         title_row_layout = QHBoxLayout()
         title_row_layout.addWidget(window_title_label)
@@ -332,10 +340,20 @@ class SettingsPage(QWidget):
             launch_command_edit.setText(
                 get_nested(self._config, ("executor", launch_command_key)) or ""
             )
-            click_x.setValue(get_nested(self._config, ("executor", click_x_key)))
+            click_x.setValue(
+                get_nested(self._config, ("executor", click_x_key))
+                if click_x_key is not None
+                else 0.0
+            )
             click_x.setObjectName(click_x_object_name)
-            click_y.setValue(get_nested(self._config, ("executor", click_y_key)))
+            click_y.setValue(
+                get_nested(self._config, ("executor", click_y_key))
+                if click_y_key is not None
+                else 0.0
+            )
             click_y.setObjectName(click_y_object_name)
+            click_x.setEnabled(click_x_key is not None)
+            click_y.setEnabled(click_y_key is not None)
             window_title_description.setText(f"用于查找 {app_display_name} 窗口的标题子串。")
 
         target.currentIndexChanged.connect(update_target_fields)
@@ -381,15 +399,25 @@ class SettingsPage(QWidget):
             self._bindings,
             ("executor", "composer_click_rel_x"),
             lambda: click_x.value()
-            if target.currentText() != "trae"
+            if target.currentText() == "codex"
             else get_nested(self._config, ("executor", "composer_click_rel_x")),
         )
         register(
             self._bindings,
             ("executor", "composer_click_rel_y"),
             lambda: click_y.value()
-            if target.currentText() != "trae"
+            if target.currentText() == "codex"
             else get_nested(self._config, ("executor", "composer_click_rel_y")),
+        )
+        register(
+            self._bindings,
+            ("executor", "cursor_composer_click_rel_x"),
+            lambda: get_nested(self._config, ("executor", "cursor_composer_click_rel_x")),
+        )
+        register(
+            self._bindings,
+            ("executor", "cursor_composer_click_rel_y"),
+            lambda: get_nested(self._config, ("executor", "cursor_composer_click_rel_y")),
         )
         register(
             self._bindings,

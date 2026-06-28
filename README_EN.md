@@ -104,7 +104,7 @@ Default hotkeys: `F9` starts/stops recording, `Esc` quits.
 `executor.default_target` in `config.json` controls where voice commands are sent by default:
 
 ```json
-"default_target": "codex"
+"default_target": "cursor"
 ```
 
 Supported values:
@@ -127,8 +127,9 @@ The current config includes AppsFolder launch commands:
 
 Notes:
 
-- Codex, ChatGPT, Cursor, and Trae have driver and router support.
-- Trae uses its own configurable composer click coordinates.
+- Codex Desktop, ChatGPT Desktop, and Cursor have been live-tested for successful prompt sending.
+- Trae has initial driver and router support, and uses its own configurable composer click coordinates, but its live send loop is still pending verification.
+- ChatGPT Desktop and Cursor use `Ctrl+Shift+L` to focus the composer; Codex and Trae currently use relative composer click coordinates.
 - If a target window is missing and its launch command is configured, the driver tries to start the app and waits for a matching window.
 
 ## Diagnostics
@@ -148,7 +149,7 @@ The control center also provides microphone, VAD, wake-word, TTS, default-target
 | `wake_word.model` | `hey_jarvis` | Wake word model; `world_activate` is bundled |
 | `wake_word.threshold` | `0.5` | Wake sensitivity |
 | `vad.silence_duration` | `3.0` | Trailing silence before recording stops |
-| `executor.default_target` | `codex` | Default send target |
+| `executor.default_target` | `cursor` | Default send target |
 | `executor.codex_window_title` | `Codex` | Codex window-title match |
 | `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT window-title match |
 | `executor.cursor_window_title` | `Cursor` | Cursor window-title match |
@@ -199,7 +200,7 @@ Shipped:
 - Microphone capture and faster-whisper transcription
 - F9 hotkey recording and VAD auto-stop
 - openWakeWord wake-word loop and tray daemon
-- Codex / ChatGPT / Cursor / Trae desktop drivers
+- Codex / ChatGPT / Cursor / Trae desktop drivers (Trae live send verification pending)
 - Default target-app routing
 - AppsFolder launch-command config
 - PySide6 control center

@@ -17,6 +17,8 @@ class CursorDriverTests(unittest.TestCase):
         self.assertEqual(driver.launch_command, settings.CURSOR_LAUNCH_COMMAND)
         self.assertEqual(driver.launch_timeout, settings.CURSOR_LAUNCH_TIMEOUT)
         self.assertEqual(driver.launch_poll_interval, settings.CURSOR_LAUNCH_POLL_INTERVAL)
+        self.assertFalse(hasattr(driver, "composer_click_rel_x"))
+        self.assertFalse(hasattr(driver, "composer_click_rel_y"))
 
     def test_focus_launches_cursor_when_window_is_missing(self) -> None:
         window = Window(hwnd=987, title="Cursor")
@@ -40,24 +42,24 @@ class CursorDriverTests(unittest.TestCase):
         popen.assert_called_once_with(r"C:\Apps\Cursor\Cursor.exe")
         focus_window.assert_called_once()
 
-    def test_default_composer_focus_clicks_one_candidate_position(self) -> None:
+    def test_composer_focus_uses_cursor_shortcut_without_clicking(self) -> None:
         window = Window(hwnd=987, title="Cursor")
         driver = CursorDriver()
 
         with (
             patch.object(settings, "CLICK_COMPOSER_BEFORE_PASTE", True),
-            patch.object(settings, "COMPOSER_CLICK_REL_X", 0.5),
-            patch.object(settings, "COMPOSER_CLICK_REL_Y", 0.9),
-            patch("voicecontrol.executor.cursor_driver.click_in_window") as click,
+            patch("voicecontrol.executor.cursor_driver.keyboard.send") as send_key,
+            patch("voicecontrol.executor.app_driver.click_in_window") as click,
+            patch("voicecontrol.executor.cursor_driver.time.sleep") as sleep,
         ):
             driver._focus_composer(window)
 
-        click.assert_called_once_with(
-            window,
-            0.5,
-            0.9,
-            settle_delay=settings.CLICK_SETTLE_DELAY,
-        )
+        send_key.assert_called_once_with(CursorDriver.AI_SIDEBAR_SHORTCUT)
+        sleep.assert_called_once_with(settings.CLICK_SETTLE_DELAY)
+        click.assert_not_called()
+
+    def test_cursor_chat_focus_shortcut_matches_cursor_ui(self) -> None:
+        self.assertEqual(CursorDriver.AI_SIDEBAR_SHORTCUT, "ctrl+shift+l")
 
 
 if __name__ == "__main__":

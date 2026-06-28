@@ -121,7 +121,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         target = window.findChild(QComboBox, "executorTargetCombo")
 
         self.assertIsNotNone(target)
-        self.assertEqual(target.currentText(), "codex")
+        self.assertEqual(target.currentText(), "cursor")
         self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor", "trae"])
 
     def test_settings_page_binds_trae_composer_coordinates(self) -> None:
@@ -151,6 +151,21 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
         self.assertAlmostEqual(next_config["executor"]["trae_composer_click_rel_x"], 0.66)
         self.assertAlmostEqual(next_config["executor"]["trae_composer_click_rel_y"], 0.77)
+
+    def test_settings_page_hides_cursor_composer_coordinates(self) -> None:
+        from PySide6.QtWidgets import QDoubleSpinBox
+
+        config = load_config()
+        config["executor"]["default_target"] = "cursor"
+        config["executor"]["cursor_composer_click_rel_x"] = 0.83
+        config["executor"]["cursor_composer_click_rel_y"] = 0.97
+        window = SettingsWindow(config)
+
+        click_x = window.findChild(QDoubleSpinBox, "cursorComposerClickRelX")
+        click_y = window.findChild(QDoubleSpinBox, "cursorComposerClickRelY")
+
+        self.assertIsNone(click_x)
+        self.assertIsNone(click_y)
 
     def test_apply_executor_change_waits_for_reload_ack(self) -> None:
         window = SettingsWindow(load_config())

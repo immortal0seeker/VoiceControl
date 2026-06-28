@@ -63,8 +63,9 @@ VAD 自动停录            热键循环加 --vad
 唤醒词 + 托盘           --wake 或 pythonw -m voicecontrol.tray_app
 目标应用路由            executor.default_target = codex / chatgpt / cursor / trae
 Codex driver            聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
-ChatGPT driver          聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
-Cursor driver           聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
+ChatGPT driver          聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
+Cursor driver           聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
+Trae driver             聚焦 -> 点击配置的输入框坐标 -> 粘贴 -> Enter；支持自动启动；尚待真实发送验证
 控制中心                python -m voicecontrol.ui.settings_app
 桌宠                    pythonw -m voicecontrol.ui.desktop_pet_app
 开机自启                托盘菜单切换
@@ -168,7 +169,7 @@ WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
-DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor | trae
+DEFAULT_EXECUTOR_TARGET = "cursor"  # codex | chatgpt | cursor | trae
 CODEX_WINDOW_TITLE = "Codex"
 CHATGPT_WINDOW_TITLE = "ChatGPT"
 CURSOR_WINDOW_TITLE = "Cursor"
@@ -176,7 +177,7 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。四者现在都可作为路由目标。
+`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。Codex Desktop、ChatGPT Desktop、Cursor 已经实测可以成功发送消息；Trae 已有 driver 和路由支持，但真实发送闭环尚待验证。
 
 ---
 
@@ -202,6 +203,7 @@ class LaunchableAppDriver(AppDriver):
 - 默认目标通过 `voicecontrol.executor.router.get_default_driver()` 获取。
 - 显式目标通过 `create_driver("codex" | "chatgpt" | "cursor" | "trae")` 创建。
 - 优先用剪贴板粘贴，而不是逐字输入。
+- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区；Codex 和 Trae 仍使用相对输入框点击坐标。
 - 桌面操作前后保留短延迟和清晰日志。
 - 注意焦点丢失、输入法、管理员权限边界、编辑器热键截获。
 

@@ -50,6 +50,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "cursor_launch_command": "explorer.exe shell:AppsFolder\\Anysphere.Cursor",
         "cursor_launch_timeout": 15.0,
         "cursor_launch_poll_interval": 0.5,
+        "cursor_composer_click_rel_x": 0.83,
+        "cursor_composer_click_rel_y": 0.97,
         "trae_window_title": "Trae",
         "trae_launch_command": "",
         "trae_launch_timeout": 15.0,

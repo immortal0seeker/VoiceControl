@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import time
+
+import keyboard
 
 from voicecontrol.config import settings
 from voicecontrol.executor.app_driver import LaunchableAppDriver
-from voicecontrol.executor.window_utils import Window, WindowError, click_in_window
+from voicecontrol.executor.window_utils import Window, WindowError
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,7 @@ class CursorDriver(LaunchableAppDriver):
     """Sends prompts to the Cursor window."""
 
     app_name = "Cursor"
-    AI_SIDEBAR_SHORTCUT = "ctrl+shift+k"
+    AI_SIDEBAR_SHORTCUT = "ctrl+shift+l"
 
     def __init__(
         self,
@@ -32,24 +35,11 @@ class CursorDriver(LaunchableAppDriver):
         )
 
     def _focus_composer(self, window: Window) -> None:
-        """Click the configured composer position."""
+        """Focus Cursor chat/new conversation with the desktop shortcut."""
         if settings.CLICK_COMPOSER_BEFORE_PASTE:
-            use_custom = (
-                settings.COMPOSER_CLICK_REL_X != 0.5
-                or settings.COMPOSER_CLICK_REL_Y != 0.9
-            )
-            if use_custom:
-                logger.info(
-                    "Using configured composer position (%.2f, %.2f)",
-                    settings.COMPOSER_CLICK_REL_X,
-                    settings.COMPOSER_CLICK_REL_Y,
-                )
-            click_in_window(
-                window,
-                settings.COMPOSER_CLICK_REL_X,
-                settings.COMPOSER_CLICK_REL_Y,
-                settle_delay=settings.CLICK_SETTLE_DELAY,
-            )
+            logger.info("Focusing Cursor chat with %s", self.AI_SIDEBAR_SHORTCUT)
+            keyboard.send(self.AI_SIDEBAR_SHORTCUT)
+            time.sleep(settings.CLICK_SETTLE_DELAY)
 
 
 if __name__ == "__main__":

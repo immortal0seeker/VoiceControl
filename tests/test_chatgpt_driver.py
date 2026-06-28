@@ -40,6 +40,25 @@ class ChatGPTDriverTests(unittest.TestCase):
         popen.assert_called_once_with(r"C:\Apps\ChatGPT\ChatGPT.exe")
         focus_window.assert_called_once()
 
+    def test_composer_focus_uses_chatgpt_shortcut_without_clicking(self) -> None:
+        window = Window(hwnd=789, title="ChatGPT")
+        driver = ChatGPTDriver()
+
+        with (
+            patch.object(settings, "CLICK_COMPOSER_BEFORE_PASTE", True),
+            patch("voicecontrol.executor.chatgpt_driver.keyboard.send") as send_key,
+            patch("voicecontrol.executor.app_driver.click_in_window") as click,
+            patch("voicecontrol.executor.chatgpt_driver.time.sleep") as sleep,
+        ):
+            driver._focus_composer(window)
+
+        send_key.assert_called_once_with(ChatGPTDriver.COMPOSER_FOCUS_SHORTCUT)
+        sleep.assert_called_once_with(settings.CLICK_SETTLE_DELAY)
+        click.assert_not_called()
+
+    def test_chatgpt_composer_focus_shortcut_matches_desktop_ui(self) -> None:
+        self.assertEqual(ChatGPTDriver.COMPOSER_FOCUS_SHORTCUT, "ctrl+shift+l")
+
 
 if __name__ == "__main__":
     unittest.main()

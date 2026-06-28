@@ -61,8 +61,9 @@ VAD auto-stop               --vad flag on hotkey loop
 Wake word + tray daemon     --wake or pythonw -m voicecontrol.tray_app
 Executor routing            codex / chatgpt / cursor / trae selected by executor.default_target
 Codex driver                focus -> click composer -> paste -> Enter; optional auto-launch
-ChatGPT driver              focus -> click composer -> paste -> Enter; optional auto-launch
-Cursor driver               focus -> click composer -> paste -> Enter; optional auto-launch
+ChatGPT driver              focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
+Cursor driver               focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
+Trae driver                 focus -> click configured composer coordinate -> paste -> Enter; optional auto-launch; pending live send verification
 Control center              python -m voicecontrol.ui.settings_app
 Desktop pet                 pythonw -m voicecontrol.ui.desktop_pet_app
 Launch at logon             tray menu toggle
@@ -168,7 +169,7 @@ WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
-DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor | trae
+DEFAULT_EXECUTOR_TARGET = "cursor"  # codex | chatgpt | cursor | trae
 CODEX_WINDOW_TITLE = "Codex"
 CHATGPT_WINDOW_TITLE = "ChatGPT"
 CURSOR_WINDOW_TITLE = "Cursor"
@@ -176,7 +177,7 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. All four are routable today.
+`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Codex Desktop, ChatGPT Desktop, and Cursor have been live-tested for successful prompt sending. Trae is routable and has a driver, but live send verification is still pending.
 
 ---
 
@@ -202,6 +203,7 @@ Rules:
 - Route default target selection through `voicecontrol.executor.router.get_default_driver()`.
 - Use `create_driver("codex" | "chatgpt" | "cursor" | "trae")` for explicit target creation.
 - Prefer clipboard paste over character typing for Chinese and long prompts.
+- ChatGPT Desktop and Cursor focus their composer with `Ctrl+Shift+L`; Codex and Trae still use relative composer click coordinates.
 - Keep desktop actions logged and delayed slightly.
 - Be careful with focus loss, IME state, admin boundaries, and editor hotkeys.
 

@@ -22,7 +22,7 @@ hey jarvis / world_activate -> 蜂鸣或 TTS「我在」
 - Python 3.11+，只使用项目 `.venv`
 - 麦克风
 - NVIDIA GPU 可选；无 GPU 时使用 CPU fallback
-- 目标桌面应用：Codex Desktop、ChatGPT Desktop、Cursor 至少按需安装其一
+- 目标桌面应用：Codex Desktop、ChatGPT Desktop、Cursor、Trae 至少按需安装其一
 
 ## 安装
 
@@ -104,7 +104,7 @@ logs\tray\YYYYMMDD_voicecontrol.log
 `config.json` 的 `executor.default_target` 决定语音命令默认发送到哪个应用：
 
 ```json
-"default_target": "codex"
+"default_target": "cursor"
 ```
 
 可选值：
@@ -113,6 +113,7 @@ logs\tray\YYYYMMDD_voicecontrol.log
 codex
 chatgpt
 cursor
+trae
 ```
 
 当前配置已写入 AppsFolder 启动命令：
@@ -126,8 +127,9 @@ cursor
 
 说明：
 
-- Codex、ChatGPT、Cursor、Trae 已有 driver 和路由支持。
-- Trae 已有初版 driver 和路由支持，并使用独立的输入框点击坐标。
+- Codex Desktop、ChatGPT Desktop、Cursor 已经实测可以成功发送消息。
+- Trae 已有初版 driver 和路由支持，并使用独立的输入框点击坐标，但真实发送闭环尚待验证。
+- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区；Codex 和 Trae 暂时使用相对位置点击输入框。
 - 如果窗口不存在且启动命令不为空，driver 会尝试启动应用并等待窗口出现。
 
 ## 诊断
@@ -147,7 +149,7 @@ cursor
 | `wake_word.model` | `hey_jarvis` | 唤醒词模型，可选 `world_activate` |
 | `wake_word.threshold` | `0.5` | 唤醒灵敏度 |
 | `vad.silence_duration` | `3.0` | 说完后静音多久自动停录 |
-| `executor.default_target` | `codex` | 默认发送目标 |
+| `executor.default_target` | `cursor` | 默认发送目标 |
 | `executor.codex_window_title` | `Codex` | Codex 窗口标题匹配 |
 | `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT 窗口标题匹配 |
 | `executor.cursor_window_title` | `Cursor` | Cursor 窗口标题匹配 |
@@ -197,7 +199,7 @@ logs/
 - 麦克风录音与 faster-whisper 转写
 - F9 热键录音与 VAD 自动停录
 - openWakeWord 唤醒词和托盘后台
-- Codex / ChatGPT / Cursor / Trae 桌面 driver
+- Codex / ChatGPT / Cursor / Trae 桌面 driver（Trae 待实测发送闭环）
 - 默认目标应用路由
 - AppsFolder 启动命令配置
 - PySide6 控制中心

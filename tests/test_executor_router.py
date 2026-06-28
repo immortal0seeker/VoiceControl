@@ -40,6 +40,29 @@ class ExecutorRouterTests(unittest.TestCase):
         self.assertEqual(driver.composer_click_rel_x, 0.77)
         self.assertEqual(driver.composer_click_rel_y, 0.88)
 
+    def test_create_cursor_driver_from_config_ignores_cursor_composer_position(self) -> None:
+        config = {
+            "executor": {
+                "default_target": "cursor",
+                "cursor_window_title": "Fresh Cursor",
+                "cursor_launch_command": r"C:\Apps\Cursor\Cursor.exe",
+                "cursor_launch_timeout": 8.0,
+                "cursor_launch_poll_interval": 0.2,
+                "cursor_composer_click_rel_x": 0.83,
+                "cursor_composer_click_rel_y": 0.97,
+            }
+        }
+
+        driver = router.create_driver_from_config(config)
+
+        self.assertIsInstance(driver, CursorDriver)
+        self.assertEqual(driver.window_title, "Fresh Cursor")
+        self.assertEqual(driver.launch_command, r"C:\Apps\Cursor\Cursor.exe")
+        self.assertEqual(driver.launch_timeout, 8.0)
+        self.assertEqual(driver.launch_poll_interval, 0.2)
+        self.assertFalse(hasattr(driver, "composer_click_rel_x"))
+        self.assertFalse(hasattr(driver, "composer_click_rel_y"))
+
     def test_create_driver_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError) as context:
             create_driver("unknown")

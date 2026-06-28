@@ -29,7 +29,7 @@ class CheckedInConfigTests(unittest.TestCase):
     def test_checked_in_config_has_executor_launch_commands(self) -> None:
         config = load_config(CONFIG_PATH)
 
-        self.assertEqual(config["executor"]["default_target"], "codex")
+        self.assertEqual(config["executor"]["default_target"], "cursor")
         self.assertEqual(
             config["executor"]["codex_launch_command"],
             "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
@@ -45,6 +45,8 @@ class CheckedInConfigTests(unittest.TestCase):
         self.assertEqual(config["executor"]["cursor_launch_command"], "explorer.exe shell:AppsFolder\\Anysphere.Cursor")
         self.assertEqual(config["executor"]["cursor_launch_timeout"], 15.0)
         self.assertEqual(config["executor"]["cursor_launch_poll_interval"], 0.5)
+        self.assertEqual(config["executor"]["cursor_composer_click_rel_x"], 0.83)
+        self.assertEqual(config["executor"]["cursor_composer_click_rel_y"], 0.97)
         self.assertEqual(config["executor"]["trae_launch_command"], "explorer.exe shell:AppsFolder\\ByteDance.TraeCN")
 
     def test_runtime_files_are_grouped_by_purpose_under_logs(self) -> None:
