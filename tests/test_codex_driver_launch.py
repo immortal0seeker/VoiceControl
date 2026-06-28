@@ -3,8 +3,35 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+from voicecontrol.executor.app_driver import LaunchableAppDriver
 from voicecontrol.executor.codex_driver import CodexDriver
 from voicecontrol.executor.window_utils import Window, WindowError
+
+
+class ExampleLaunchableDriver(LaunchableAppDriver):
+    app_name = "Example App"
+
+
+class LaunchableAppDriverTests(unittest.TestCase):
+    def test_find_launches_missing_window_and_returns_it_when_it_appears(self) -> None:
+        window = Window(hwnd=456, title="Example")
+        driver = ExampleLaunchableDriver(
+            window_title="Example",
+            launch_command=r"C:\Apps\Example\Example.exe",
+            launch_timeout=1.0,
+            launch_poll_interval=0.1,
+        )
+
+        with (
+            patch("voicecontrol.executor.app_driver.find_window", side_effect=[None, window]),
+            patch("voicecontrol.executor.app_driver.subprocess.Popen") as popen,
+            patch("voicecontrol.executor.app_driver.time.monotonic", side_effect=[0.0, 0.0]),
+            patch("voicecontrol.executor.app_driver.time.sleep"),
+        ):
+            found = driver.find()
+
+        self.assertEqual(found, window)
+        popen.assert_called_once_with(r"C:\Apps\Example\Example.exe")
 
 
 class CodexDriverLaunchTests(unittest.TestCase):
@@ -21,11 +48,11 @@ class CodexDriverLaunchTests(unittest.TestCase):
             self.fail(f"CodexDriver should accept launch settings: {exc}")
 
         with (
-            patch("voicecontrol.executor.codex_driver.find_window", side_effect=[None, window]),
-            patch("voicecontrol.executor.codex_driver.subprocess.Popen") as popen,
-            patch("voicecontrol.executor.codex_driver.focus_window") as focus_window,
-            patch("voicecontrol.executor.codex_driver.time.monotonic", side_effect=[0.0, 0.0]),
-            patch("voicecontrol.executor.codex_driver.time.sleep"),
+            patch("voicecontrol.executor.app_driver.find_window", side_effect=[None, window]),
+            patch("voicecontrol.executor.app_driver.subprocess.Popen") as popen,
+            patch("voicecontrol.executor.app_driver.focus_window") as focus_window,
+            patch("voicecontrol.executor.app_driver.time.monotonic", side_effect=[0.0, 0.0]),
+            patch("voicecontrol.executor.app_driver.time.sleep"),
         ):
             found = driver.focus()
 
@@ -39,7 +66,7 @@ class CodexDriverLaunchTests(unittest.TestCase):
         except TypeError as exc:
             self.fail(f"CodexDriver should accept an empty launch command: {exc}")
 
-        with patch("voicecontrol.executor.codex_driver.find_window", return_value=None):
+        with patch("voicecontrol.executor.app_driver.find_window", return_value=None):
             with self.assertRaises(WindowError) as context:
                 driver.focus()
 

@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
@@ -112,6 +113,14 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         window = SettingsWindow(load_config())
 
         self.assertIsNotNone(window.findChild(QLineEdit, "codexLaunchCommand"))
+
+    def test_settings_page_exposes_executor_target_selector(self) -> None:
+        window = SettingsWindow(load_config())
+        target = window.findChild(QComboBox, "executorTargetCombo")
+
+        self.assertIsNotNone(target)
+        self.assertEqual(target.currentText(), "codex")
+        self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor"])
 
     def test_settings_page_exposes_tts_controls(self) -> None:
         window = SettingsWindow(load_config())
@@ -438,7 +447,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
                 patch("voicecontrol.ui.pages.diagnostics_page.run_vad_file_test") as vad,
                 patch("voicecontrol.ui.pages.diagnostics_page.run_wake_word_file_test") as wake_word,
                 patch("voicecontrol.ui.pages.diagnostics_page.TextSpeaker") as speaker_class,
-                patch("voicecontrol.ui.pages.diagnostics_page.CodexDriver") as driver_class,
+                patch("voicecontrol.ui.pages.diagnostics_page.get_default_driver") as get_default_driver,
             ):
                 microphone.return_value = DiagnosticResult(name="microphone", status="ok", details={"rms": 0.25})
                 vad.return_value = DiagnosticResult(name="vad", status="ok", details={"finished": True})
@@ -460,7 +469,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             vad.assert_called_once_with("sample_vad.wav", diagnostic_path=diagnostic_path)
             wake_word.assert_called_once_with("sample_wake.wav", diagnostic_path=diagnostic_path)
             speaker_class.return_value.speak.assert_called_once()
-            driver_class.return_value.send_prompt.assert_called_once()
+            get_default_driver.return_value.send_prompt.assert_called_once()
             self.assertIn("ok", mic_result.text())
             self.assertIn("rms", mic_result.text())
             self.assertIn("ok", vad_result.text())

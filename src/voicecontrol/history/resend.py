@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from voicecontrol.executor.app_driver import AppDriver
-from voicecontrol.executor.codex_driver import CodexDriver
+from voicecontrol.executor.router import get_default_driver
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.history.store import CommandHistoryRecord, append_command_history, latest_command_with_text
 
@@ -36,7 +36,7 @@ def resend_last_command(
     if record is None:
         raise ResendError("No command with recognized text found in history.")
 
-    target_driver = driver or CodexDriver()
+    target_driver = driver or get_default_driver()
     sent = False
     send_error: str | None = None
     try:

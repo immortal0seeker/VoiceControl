@@ -66,11 +66,20 @@ WHISPER_CPU_COMPUTE_TYPE: str = "int8"
 
 # --- Executor / desktop automation -----------------------------------------
 # Substring (case-insensitive) used to locate the target app window.
+DEFAULT_EXECUTOR_TARGET: str = "codex"
 CODEX_WINDOW_TITLE: str = "Codex"
 # Optional executable path or launch command used when the Codex window is absent.
 CODEX_LAUNCH_COMMAND: str = ""
 CODEX_LAUNCH_TIMEOUT: float = 15.0
 CODEX_LAUNCH_POLL_INTERVAL: float = 0.5
+CHATGPT_WINDOW_TITLE: str = "ChatGPT"
+CHATGPT_LAUNCH_COMMAND: str = ""
+CHATGPT_LAUNCH_TIMEOUT: float = 15.0
+CHATGPT_LAUNCH_POLL_INTERVAL: float = 0.5
+CURSOR_WINDOW_TITLE: str = "Cursor"
+CURSOR_LAUNCH_COMMAND: str = "explorer.exe shell:AppsFolder\\Anysphere.Cursor"
+CURSOR_LAUNCH_TIMEOUT: float = 15.0
+CURSOR_LAUNCH_POLL_INTERVAL: float = 0.5
 # Press Enter after pasting to submit the prompt.
 SEND_PROMPT_AUTO_ENTER: bool = True
 # Delays (seconds) around desktop actions — keep small but non-zero (AGENTS §6).
@@ -163,10 +172,19 @@ WHISPER_VAD_FILTER = _STT_CONFIG["whisper_vad_filter"]
 WHISPER_CONDITION_ON_PREVIOUS_TEXT = _STT_CONFIG["whisper_condition_on_previous_text"]
 
 _EXECUTOR_CONFIG = _USER_CONFIG["executor"]
+DEFAULT_EXECUTOR_TARGET = _EXECUTOR_CONFIG["default_target"]
 CODEX_WINDOW_TITLE = _EXECUTOR_CONFIG["codex_window_title"]
 CODEX_LAUNCH_COMMAND = _EXECUTOR_CONFIG["codex_launch_command"]
 CODEX_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["codex_launch_timeout"]
 CODEX_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["codex_launch_poll_interval"]
+CHATGPT_WINDOW_TITLE = _EXECUTOR_CONFIG["chatgpt_window_title"]
+CHATGPT_LAUNCH_COMMAND = _EXECUTOR_CONFIG["chatgpt_launch_command"]
+CHATGPT_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["chatgpt_launch_timeout"]
+CHATGPT_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["chatgpt_launch_poll_interval"]
+CURSOR_WINDOW_TITLE = _EXECUTOR_CONFIG["cursor_window_title"]
+CURSOR_LAUNCH_COMMAND = _EXECUTOR_CONFIG["cursor_launch_command"]
+CURSOR_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["cursor_launch_timeout"]
+CURSOR_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["cursor_launch_poll_interval"]
 SEND_PROMPT_AUTO_ENTER = _EXECUTOR_CONFIG["send_prompt_auto_enter"]
 CLICK_COMPOSER_BEFORE_PASTE = _EXECUTOR_CONFIG["click_composer_before_paste"]
 COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["composer_click_rel_x"]

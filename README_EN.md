@@ -1,24 +1,28 @@
 <div align="right">
 
-[中文](README.md) | **[English](README_EN.md)**
+[中文](README.md) | **English**
 
 </div>
 
 # VoiceControl
 
-A local voice desktop assistant for Windows 11. Wake word → record → transcribe → send to Codex Desktop automatically.
+VoiceControl is a local voice-driven desktop assistant for Windows 11. After a wake word, it records your command, transcribes it with Whisper, and sends it to the configured target app.
 
 ```text
-hey jarvis (or world_activate) → beep / TTS “我在” → speak command → auto-stop on silence → Whisper STT → paste into Codex
+hey jarvis / world_activate -> beep or TTS "I'm here"
+-> speak command -> VAD auto-stop -> Whisper transcription
+-> send to Codex / ChatGPT / Cursor
 ```
+
+It is a local desktop automation system, not a general chatbot.
 
 ## Requirements
 
 - Windows 11
-- Python 3.11+ (use the project `.venv` only — do not use global Python)
+- Python 3.11+, using only the project `.venv`
 - Microphone
-- NVIDIA GPU optional (Whisper defaults to `cuda`/`float16`; falls back to CPU automatically)
-- [Codex Desktop](https://openai.com/codex) should be running first (may be minimized; optional `codex_launch_command` in `config.json` can auto-launch it)
+- NVIDIA GPU optional; CPU fallback is supported
+- At least one target desktop app installed as needed: Codex Desktop, ChatGPT Desktop, or Cursor
 
 ## Installation
 
@@ -29,170 +33,191 @@ python -m venv .venv
 .venv\Scripts\pip.exe install -e .
 ```
 
-`pip install -e .` installs the `voicecontrol` package in editable mode so `python -m voicecontrol.*` works from any directory.
+`pip install -e .` registers the `voicecontrol` package so `python -m voicecontrol.*` works from any directory.
 
-The first run downloads Whisper and openWakeWord models; an internet connection is required. The bundled custom wake word `world_activate.onnx` ships with the package.
+The first Whisper / openWakeWord run may need to download models. The custom wake word model `world_activate.onnx` is bundled.
 
 ## Usage
 
-### Settings UI
+### Control Center
 
 ```powershell
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-You can also launch it from the tray menu (**Open settings**) or by double-clicking
-the tray icon, in a separate process.
+The control center edits `config.json`. Restart the tray/listener process after saving.
 
-The UI reads and writes root `config.json`. **Restart the tray/listener** after saving.
-The control center uses five sidebar pages: recording/status controls, settings
-(including TTS), diagnostics, command history, and logs.
+The Executor card can choose the default target app:
 
-### Daily use (tray daemon, recommended)
+```text
+codex | chatgpt | cursor
+```
+
+### Daily Use: Tray Daemon
 
 ```powershell
 .venv\Scripts\pythonw.exe -m voicecontrol.tray_app
 ```
 
-A **V** tray icon appears (loads `ui/assets/app_icon.png` when available). Right-click menu:
+The tray menu supports:
 
 - Pause / resume listening
-- Start / stop recording (skip wake word; record a command directly)
+- Start / stop recording
 - Open settings
 - Show / hide desktop pet
-- Toggle launch-at-logon
+- Launch at logon
 - Quit
 
-Double-clicking the tray icon opens the settings/control-center UI. Tray logs live
-at `logs\tray\YYYYMMDD_voicecontrol.log` (one file per calendar day).
+Tray logs:
 
-When TTS is enabled, short status phrases are spoken on pipeline events (e.g. “我在”, “请说”, “正在识别”, “已发送”).
+```text
+logs\tray\YYYYMMDD_voicecontrol.log
+```
 
-### Desktop pet status window
+### Desktop Pet
 
 ```powershell
 .venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
 ```
 
-The desktop pet is a minimal transparent always-on-top floating window. Drag it
-to reposition it, left-click it to open the control center, or right-click it to
-pause/resume listening, open the control center, or quit. It polls
-`logs\runtime\runtime_status.json` every second and switches text expressions for
-listening, recording, sending, and error states. It remembers its last position
-on close. The Desktop Pet card in settings can disable the pulse animation.
+The desktop pet reads `logs\runtime\runtime_status.json` and changes its display for listening, recording, sending, and error states.
 
-### Foreground debug (console output)
-
-`main.py` is now the developer/debug CLI. Daily use should prefer the tray
-daemon.
+### Foreground Debug
 
 ```powershell
-# Wake-word mode
 .venv\Scripts\python.exe -m voicecontrol.main --wake
-
-# Transcribe only; do not send to Codex
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
 ```
 
-Say the wake word (default **“hey jarvis”** in English, or select **world_activate** in settings) → hear a beep / TTS → speak your command in Chinese → recording stops after ~3 s of silence; press **F9** during recording to stop early.
-
-### Hotkey mode (no wake word)
+### Hotkey Mode
 
 ```powershell
-# Single fixed-duration recording (default 5 s)
 .venv\Scripts\python.exe -m voicecontrol.main --once
-
-# F9 start/stop, Esc quit
 .venv\Scripts\python.exe -m voicecontrol.main
-
-# F9 start; auto-stop when you finish speaking
 .venv\Scripts\python.exe -m voicecontrol.main --vad
 ```
 
-### Diagnostics
+Default hotkeys: `F9` starts/stops recording, `Esc` quits.
+
+## Target Apps And Launch Commands
+
+`executor.default_target` in `config.json` controls where voice commands are sent by default:
+
+```json
+"default_target": "codex"
+```
+
+Supported values:
+
+```text
+codex
+chatgpt
+cursor
+```
+
+The current config includes AppsFolder launch commands:
+
+```json
+"codex_launch_command": "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
+"chatgpt_launch_command": "explorer.exe shell:AppsFolder\\OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0!ChatGPT",
+"cursor_launch_command": "explorer.exe shell:AppsFolder\\Anysphere.Cursor",
+"trae_launch_command": "explorer.exe shell:AppsFolder\\ByteDance.TraeCN"
+```
+
+Notes:
+
+- Codex, ChatGPT, and Cursor have driver and router support.
+- Trae has a launch command configured, but no driver/router support yet.
+- If a target window is missing and its launch command is configured, the driver tries to start the app and waits for a matching window.
+
+## Diagnostics
 
 ```powershell
-# List microphone devices
 .venv\Scripts\python.exe -m voicecontrol.audio.device_manager
-
-# List visible windows (check Codex window title)
 .venv\Scripts\python.exe -m voicecontrol.executor.window_utils
-
-# Check autostart state and launch command
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
 
-The settings UI also offers mic, VAD, wake-word file, TTS, and Codex-send tests
-plus recent log viewing.
+The control center also provides microphone, VAD, wake-word, TTS, default-target send tests, and log viewing.
 
-## Configuration
+## Common Configuration
 
-User settings live in root [`config.json`](config.json), merged over code defaults by [`src/voicecontrol/config/manager.py`](src/voicecontrol/config/manager.py) and exported at runtime via [`settings.py`](src/voicecontrol/config/settings.py).
-
-Common options:
-
-| Parameter / config.json key | Default | Description |
+| Config key | Default/example | Description |
 | --- | --- | --- |
-| `wake_word.model` | `hey_jarvis` | Wake word; bundled `world_activate` also available |
-| `wake_word.threshold` | `0.5` | Wake sensitivity (lower = more sensitive) |
-| `wake_word.cooldown` | `2.0` | Seconds to ignore re-triggers after a command finishes |
-| `vad.silence_duration` | `3.0` | Trailing silence before stop (seconds) |
-| `executor.codex_window_title` | `Codex` | Window title substring to match |
-| `executor.codex_launch_command` | `""` | Shell command to launch Codex if the window is missing |
+| `wake_word.model` | `hey_jarvis` | Wake word model; `world_activate` is bundled |
+| `wake_word.threshold` | `0.5` | Wake sensitivity |
+| `vad.silence_duration` | `3.0` | Trailing silence before recording stops |
+| `executor.default_target` | `codex` | Default send target |
+| `executor.codex_window_title` | `Codex` | Codex window-title match |
+| `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT window-title match |
+| `executor.cursor_window_title` | `Cursor` | Cursor window-title match |
 | `stt.whisper_model_size` | `small` | Upgrade path: `medium` / `large-v3` |
 | `tts.enabled` | `true` | Windows SAPI short status phrases |
-| `hotkeys.record_hotkey` | `f9` | Hotkey-mode record key; also manual stop during wake-loop recording |
+| `hotkeys.record_hotkey` | `f9` | Recording hotkey |
 
-## Project layout
+## Project Layout
 
 ```text
 config.json
 src/voicecontrol/
-├── main.py           CLI entry (--once / --vad / --wake / --no-send)
-├── tray_app.py       System-tray daemon
-├── config/           settings.py, manager.py
-├── audio/            Microphone & recording
-├── stt/              faster-whisper
-├── vad/              Silero VAD endpointing
-├── wake_word/        openWakeWord + models/world_activate.onnx
-├── executor/         Codex window focus + paste
-├── pipeline/         Orchestration & status events
-├── control/          Tray file commands (logs/runtime/control_command.json)
-├── events/           Status pub/sub + runtime status snapshot
-├── history/          Command history JSONL
-├── diagnostics/      Self-test helpers
-├── tts/              Windows SAPI status speech
-├── ui/               PySide6 control center UI
-│   ├── desktop_pet.py     Desktop pet floating window
-│   └── desktop_pet_app.py Desktop pet entry point
-└── utils/            Beeps, launch-at-logon, hotkeys
+├── main.py
+├── tray_app.py
+├── config/
+├── audio/
+├── stt/
+├── vad/
+├── wake_word/
+├── executor/
+│   ├── app_driver.py
+│   ├── router.py
+│   ├── codex_driver.py
+│   ├── chatgpt_driver.py
+│   ├── cursor_driver.py
+│   └── window_utils.py
+├── pipeline/
+├── control/
+├── events/
+├── history/
+├── diagnostics/
+├── tts/
+├── ui/
+└── utils/
 logs/
-├── tray/             Daily tray logs (YYYYMMDD_voicecontrol.log)
-├── history/          command_history.jsonl
-├── diagnostics/      diagnostics.jsonl
-└── runtime/          runtime_status.json, control_command.json
+├── tray/
+├── history/
+├── diagnostics/
+└── runtime/
 ```
 
-## Feature status
+## Feature Status
 
-**Shipped**
+Shipped:
 
-- Microphone capture and faster-whisper transcription (Chinese / English)
-- Hotkey trigger (F9 start/stop) and VAD auto-stop on silence
-- Wake word (`hey_jarvis` / bundled `world_activate`) plus system-tray background daemon
-- Tray manual recording, pause/resume, launch-at-logon toggle, and double-click settings
-- Auto-focus Codex Desktop and paste commands; optional Codex auto-launch
-- PySide6 control center backed by `config.json`
-- Windows SAPI pipeline status TTS (short phrases)
-- Runtime status snapshot (`logs/runtime/runtime_status.json`) polled by the recording page
-- Command history (`logs/history/command_history.jsonl`) and resend last command
-- Minimal desktop pet floating window with transparent topmost drag, tray show/hide, right-click pause/resume, click-to-open control center, remembered position, optional animation, and runtime status text expressions
+- Microphone capture and faster-whisper transcription
+- F9 hotkey recording and VAD auto-stop
+- openWakeWord wake-word loop and tray daemon
+- Codex / ChatGPT / Cursor desktop drivers
+- Default target-app routing
+- AppsFolder launch-command config
+- PySide6 control center
+- Windows SAPI status TTS
+- Runtime status snapshot
+- Command history and resend
+- Desktop pet status window
+- Diagnostics and logs pages
 
-**Planned**
+Planned:
 
-- ChatGPT / Cursor drivers · LLM routing · read-aloud of Codex replies · installer packaging, etc.
+- Small desktop task abilities
+- Custom desktop-pet avatars
+- Packaging and startup experience
+- Stability and diagnostics improvements
+- Smarter voice routing
+- CLI agent driver
+- Trae driver/router
 
-## Developer docs
+## Developer Docs
 
-- Agent guide: [`AGENTS.md`](AGENTS.md) (English, for AI agents)
-- Chinese notes: [`AGENTS_CN.md`](AGENTS_CN.md)
+- Agent guide: [AGENTS.md](AGENTS.md)
+- Agent Chinese notes: [AGENTS_CN.md](AGENTS_CN.md)
+- Chinese README: [README.md](README.md)

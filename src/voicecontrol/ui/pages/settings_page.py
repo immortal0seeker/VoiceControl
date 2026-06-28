@@ -187,7 +187,12 @@ class SettingsPage(QWidget):
         content_layout.addWidget(frame)
 
     def _add_executor_card(self, content_layout: QVBoxLayout) -> None:
-        frame, layout = card("Codex")
+        frame, layout = card("Executor")
+        target = combo(
+            get_nested(self._config, ("executor", "default_target")),
+            ["codex", "chatgpt", "cursor"],
+        )
+        target.setObjectName("executorTargetCombo")
         codex_title = line_edit(
             get_nested(self._config, ("executor", "codex_window_title")), "Codex"
         )
@@ -214,6 +219,9 @@ class SettingsPage(QWidget):
         add_row(layout, "输入框 X 位置", click_x, "窗口内相对坐标，0 左侧，1 右侧。")
         add_row(layout, "输入框 Y 位置", click_y, "窗口内相对坐标，0 顶部，1 底部。")
 
+        add_row(layout, "目标应用", target, "语音命令默认发送到哪个桌面应用。")
+
+        register(self._bindings, ("executor", "default_target"), target.currentText)
         register(
             self._bindings,
             ("executor", "codex_window_title"),

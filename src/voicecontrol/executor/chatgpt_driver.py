@@ -1,4 +1,4 @@
-"""Codex Desktop driver — the first concrete AppDriver."""
+"""ChatGPT Desktop driver."""
 
 from __future__ import annotations
 
@@ -11,17 +11,17 @@ from voicecontrol.executor.window_utils import WindowError
 logger = logging.getLogger(__name__)
 
 
-class CodexDriver(LaunchableAppDriver):
-    """Sends prompts to the Codex Desktop window."""
+class ChatGPTDriver(LaunchableAppDriver):
+    """Sends prompts to the ChatGPT Desktop window."""
 
-    app_name = "Codex Desktop"
+    app_name = "ChatGPT Desktop"
 
     def __init__(
         self,
-        window_title: str = settings.CODEX_WINDOW_TITLE,
-        launch_command: str = settings.CODEX_LAUNCH_COMMAND,
-        launch_timeout: float = settings.CODEX_LAUNCH_TIMEOUT,
-        launch_poll_interval: float = settings.CODEX_LAUNCH_POLL_INTERVAL,
+        window_title: str = settings.CHATGPT_WINDOW_TITLE,
+        launch_command: str = settings.CHATGPT_LAUNCH_COMMAND,
+        launch_timeout: float = settings.CHATGPT_LAUNCH_TIMEOUT,
+        launch_poll_interval: float = settings.CHATGPT_LAUNCH_POLL_INTERVAL,
     ) -> None:
         super().__init__(
             window_title=window_title,
@@ -40,11 +40,11 @@ if __name__ == "__main__":
         if reconfigure is not None:
             reconfigure(encoding="utf-8")
 
-    driver = CodexDriver()
+    driver = ChatGPTDriver()
     try:
         window = driver.find()
         print(f"Found {driver.app_name}: [{window.hwnd}] {window.title!r}")
-        driver.send_prompt("你好，这是一条来自 VoiceControl 的测试消息。")
+        driver.send_prompt("你好，这是一条来自 VoiceControl 的 ChatGPT 测试消息。")
         print("Sent test prompt.")
     except WindowError as exc:
         print(f"ERROR: {exc}")

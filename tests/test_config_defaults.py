@@ -26,6 +26,27 @@ class CheckedInConfigTests(unittest.TestCase):
             },
         )
 
+    def test_checked_in_config_has_executor_launch_commands(self) -> None:
+        config = load_config(CONFIG_PATH)
+
+        self.assertEqual(config["executor"]["default_target"], "codex")
+        self.assertEqual(
+            config["executor"]["codex_launch_command"],
+            "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
+        )
+        self.assertEqual(config["executor"]["chatgpt_window_title"], "ChatGPT")
+        self.assertEqual(
+            config["executor"]["chatgpt_launch_command"],
+            "explorer.exe shell:AppsFolder\\OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0!ChatGPT",
+        )
+        self.assertEqual(config["executor"]["chatgpt_launch_timeout"], 15.0)
+        self.assertEqual(config["executor"]["chatgpt_launch_poll_interval"], 0.5)
+        self.assertEqual(config["executor"]["cursor_window_title"], "Cursor")
+        self.assertEqual(config["executor"]["cursor_launch_command"], "explorer.exe shell:AppsFolder\\Anysphere.Cursor")
+        self.assertEqual(config["executor"]["cursor_launch_timeout"], 15.0)
+        self.assertEqual(config["executor"]["cursor_launch_poll_interval"], 0.5)
+        self.assertEqual(config["executor"]["trae_launch_command"], "explorer.exe shell:AppsFolder\\ByteDance.TraeCN")
+
     def test_runtime_files_are_grouped_by_purpose_under_logs(self) -> None:
         self.assertEqual(settings.LOG_DIR.name, "logs")
         self.assertEqual(settings.TRAY_LOG_DIR, settings.LOG_DIR / "tray")

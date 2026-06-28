@@ -8,6 +8,7 @@ char-by-char typing for Chinese / long prompts).
 from __future__ import annotations
 
 import logging
+import subprocess
 import time
 from abc import ABC
 
@@ -91,3 +92,65 @@ class AppDriver(ABC):
             time.sleep(settings.ENTER_DELAY)
             keyboard.send("enter")
             logger.info("Submitted prompt to %s.", self.app_name)
+
+
+class LaunchableAppDriver(AppDriver):
+    """App driver that can start the target app when its window is absent."""
+
+    launch_command: str = ""
+    launch_timeout: float = settings.CODEX_LAUNCH_TIMEOUT
+    launch_poll_interval: float = settings.CODEX_LAUNCH_POLL_INTERVAL
+
+    def __init__(
+        self,
+        window_title: str,
+        launch_command: str = "",
+        launch_timeout: float = settings.CODEX_LAUNCH_TIMEOUT,
+        launch_poll_interval: float = settings.CODEX_LAUNCH_POLL_INTERVAL,
+    ) -> None:
+        self.window_title = window_title
+        self.launch_command = launch_command
+        self.launch_timeout = launch_timeout
+        self.launch_poll_interval = launch_poll_interval
+
+    def find(self) -> Window:
+        """Locate the target window, optionally launching the app first."""
+        window = find_window(self.window_title)
+        if window is not None:
+            return window
+
+        if not self.launch_command.strip():
+            raise WindowError(
+                f"{self.app_name} window not found "
+                f"(looking for title containing '{self.window_title}'). "
+                f"Is the app running?"
+            )
+
+        logger.info(
+            "%s window not found; launching with configured command.",
+            self.app_name,
+        )
+        try:
+            subprocess.Popen(self.launch_command)
+        except Exception as exc:
+            logger.error("Failed to launch %s: %s", self.app_name, exc)
+            raise WindowError(f"Failed to launch {self.app_name}: {exc}") from exc
+
+        deadline = time.monotonic() + self.launch_timeout
+        while time.monotonic() < deadline:
+            time.sleep(self.launch_poll_interval)
+            window = find_window(self.window_title)
+            if window is not None:
+                logger.info("%s window appeared after launch.", self.app_name)
+                return window
+
+        logger.error(
+            "%s launch timed out after %.1fs waiting for title containing '%s'.",
+            self.app_name,
+            self.launch_timeout,
+            self.window_title,
+        )
+        raise WindowError(
+            f"{self.app_name} launched but no matching window appeared within "
+            f"{self.launch_timeout:.1f}s."
+        )

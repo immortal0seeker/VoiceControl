@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.history.resend import ResendError, resend_last_command
@@ -12,6 +12,17 @@ from voicecontrol.history.store import CommandHistoryRecord, append_command_hist
 
 
 class ResendLastCommandTests(unittest.TestCase):
+    def test_resend_last_command_uses_default_driver_from_router(self) -> None:
+        driver = Mock()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "history.jsonl"
+            append_command_history(CommandHistoryRecord(text="上一条命令", wav_path=Path("old.wav"), sent=True), path=path)
+
+            with patch("voicecontrol.history.resend.get_default_driver", return_value=driver):
+                resend_last_command(history_path=path)
+
+        driver.send_prompt.assert_called_once_with("上一条命令")
+
     def test_latest_command_with_text_skips_empty_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "history.jsonl"

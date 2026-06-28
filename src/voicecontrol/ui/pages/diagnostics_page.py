@@ -13,7 +13,7 @@ from voicecontrol.diagnostics.microphone import run_microphone_test
 from voicecontrol.diagnostics.store import DiagnosticResult
 from voicecontrol.diagnostics.vad import run_vad_file_test
 from voicecontrol.diagnostics.wake_word import run_wake_word_file_test
-from voicecontrol.executor.codex_driver import CodexDriver
+from voicecontrol.executor.router import get_default_driver
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.pages.base import page_layout
@@ -276,7 +276,7 @@ class DiagnosticsPage(QWidget):
 
     def _run_codex_send(self) -> None:
         try:
-            CodexDriver().send_prompt("这是一条来自 VoiceControl 控制中心的测试消息。")
+            get_default_driver().send_prompt("这是一条来自 VoiceControl 控制中心的测试消息。")
         except WindowError as exc:
             self._codex_result_label.setText(f"发送测试失败：{exc}")
             return

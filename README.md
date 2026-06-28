@@ -1,24 +1,28 @@
 <div align="right">
 
-**[中文](README.md)** | [English](README_EN.md)
+**中文** | [English](README_EN.md)
 
 </div>
 
 # VoiceControl
 
-Windows 11 本地语音桌面助手。说唤醒词 → 录音 → 转写 → 自动发送到 Codex Desktop。
+VoiceControl 是 Windows 11 本地语音桌面助手：说出唤醒词后录音，使用 Whisper 转写，再把命令发送到配置的目标应用。
 
 ```text
-hey jarvis（或 world_activate）→ 蜂鸣 / TTS「我在」→ 说命令 → 静音自动停录 → Whisper 转写 → 粘贴到 Codex
+hey jarvis / world_activate -> 蜂鸣或 TTS「我在」
+-> 说命令 -> VAD 自动停录 -> Whisper 转写
+-> 发送到 Codex / ChatGPT / Cursor
 ```
+
+它是本地桌面自动化系统，不是通用聊天机器人。
 
 ## 环境要求
 
 - Windows 11
-- Python 3.11+（仅用项目 `.venv`，不要用全局 Python）
+- Python 3.11+，只使用项目 `.venv`
 - 麦克风
-- NVIDIA GPU 可选（Whisper 默认 `cuda`/`float16`，无 GPU 时自动降级 CPU）
-- [Codex Desktop](https://openai.com/codex) 需**先启动**（可最小化；也可在 `config.json` 配置 `codex_launch_command` 自动启动）
+- NVIDIA GPU 可选；无 GPU 时使用 CPU fallback
+- 目标桌面应用：Codex Desktop、ChatGPT Desktop、Cursor 至少按需安装其一
 
 ## 安装
 
@@ -29,159 +33,191 @@ python -m venv .venv
 .venv\Scripts\pip.exe install -e .
 ```
 
-`pip install -e .` 会以可编辑模式安装 `voicecontrol` 包，之后可在任意目录使用 `python -m voicecontrol.*`。
+`pip install -e .` 会注册 `voicecontrol` 包，之后可以使用 `python -m voicecontrol.*`。
 
-首次运行会下载 Whisper 与 openWakeWord 模型，需联网。捆绑的自定义唤醒词 `world_activate.onnx` 已随包分发。
+首次使用 Whisper / openWakeWord 时可能需要下载模型。项目已内置自定义唤醒词模型 `world_activate.onnx`。
 
 ## 运行
 
-### 设置页
+### 控制中心
 
 ```powershell
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-也可从托盘右键菜单 **「打开设置」** 或双击托盘图标启动（独立进程）。
+控制中心可修改 `config.json`。保存后需要重启托盘/监听进程才生效。
 
-设置页读写根目录 `config.json`，保存后**重启托盘/监听进程**生效。控制中心左侧导航包括 5 页：录音/状态控制、设置（含 TTS）、诊断、命令历史、日志查看。
+设置页的 Executor 卡片可以选择默认目标应用：
 
-### 日常使用（托盘后台，推荐）
+```text
+codex | chatgpt | cursor
+```
+
+### 日常托盘后台
 
 ```powershell
 .venv\Scripts\pythonw.exe -m voicecontrol.tray_app
 ```
 
-任务栏出现 **V** 图标（优先加载 `ui/assets/app_icon.png`）。右键菜单：
+托盘菜单支持：
 
 - 暂停 / 恢复监听
-- 开始 / 停止录音（跳过唤醒词，直接录命令）
+- 开始 / 停止录音
 - 打开设置
 - 显示 / 隐藏桌宠
-- 开关开机自启
+- 开机自启
 - 退出
 
-双击托盘图标会打开设置/控制中心。托盘日志：`logs\tray\YYYYMMDD_voicecontrol.log`（按日一个文件）。
+托盘日志位于：
 
-启用 TTS 时，流水线状态会播报短句（如「我在」「请说」「正在识别」「已发送」）。
+```text
+logs\tray\YYYYMMDD_voicecontrol.log
+```
 
-### 桌面宠物状态窗
+### 桌宠
 
 ```powershell
 .venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
 ```
 
-桌宠是最小透明置顶悬浮窗：可拖动，左键点击打开控制中心，右键可暂停/恢复监听、打开控制中心或退出。它每秒读取 `logs\runtime\runtime_status.json`，根据监听、录音、发送、出错等状态切换文字表情；关闭时会记住位置。设置页的 Desktop Pet 卡片可关闭闪烁动画。
+桌宠会读取 `logs\runtime\runtime_status.json`，按监听、录音、发送、错误等状态切换显示。
 
-### 前台调试（有控制台输出）
-
-`main.py` 现在定位为开发调试 CLI，日常使用优先启动托盘。
+### 前台调试
 
 ```powershell
-# 唤醒词模式
 .venv\Scripts\python.exe -m voicecontrol.main --wake
-
-# 只转写，不发送到 Codex
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
 ```
 
-说唤醒词（默认 **"hey jarvis"** 英文，或设置页选 **world_activate**）→ 听到蜂鸣 / TTS → 说中文命令 → 静音约 3 秒后自动结束；录音中可按 **F9** 提前停止。
-
-### 热键模式（无唤醒词）
+### 热键模式
 
 ```powershell
-# 单次固定时长录音（默认 5 秒）
 .venv\Scripts\python.exe -m voicecontrol.main --once
-
-# F9 开始/停止，Esc 退出
 .venv\Scripts\python.exe -m voicecontrol.main
-
-# F9 开始，说完自动停止
 .venv\Scripts\python.exe -m voicecontrol.main --vad
 ```
 
-### 诊断
+默认热键：`F9` 开始/停止录音，`Esc` 退出。
+
+## 目标应用与启动命令
+
+`config.json` 的 `executor.default_target` 决定语音命令默认发送到哪个应用：
+
+```json
+"default_target": "codex"
+```
+
+可选值：
+
+```text
+codex
+chatgpt
+cursor
+```
+
+当前配置已写入 AppsFolder 启动命令：
+
+```json
+"codex_launch_command": "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
+"chatgpt_launch_command": "explorer.exe shell:AppsFolder\\OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0!ChatGPT",
+"cursor_launch_command": "explorer.exe shell:AppsFolder\\Anysphere.Cursor",
+"trae_launch_command": "explorer.exe shell:AppsFolder\\ByteDance.TraeCN"
+```
+
+说明：
+
+- Codex、ChatGPT、Cursor 已有 driver 和路由支持。
+- Trae 目前只预置启动命令，尚未接入 driver/router。
+- 如果窗口不存在且启动命令不为空，driver 会尝试启动应用并等待窗口出现。
+
+## 诊断
 
 ```powershell
-# 列出麦克风设备
 .venv\Scripts\python.exe -m voicecontrol.audio.device_manager
-
-# 列出可见窗口（查 Codex 标题）
 .venv\Scripts\python.exe -m voicecontrol.executor.window_utils
-
-# 查看自启状态与启动命令
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
 
-设置 UI 内也提供麦克风、VAD、唤醒词文件、TTS、Codex 发送测试与近期日志查看。
+控制中心也提供麦克风、VAD、唤醒词、TTS、默认目标发送测试和日志查看。
 
-## 配置
+## 常用配置
 
-用户配置在根目录 [`config.json`](config.json)，由 [`src/voicecontrol/config/manager.py`](src/voicecontrol/config/manager.py) 与代码默认值合并，运行时经 [`settings.py`](src/voicecontrol/config/settings.py) 导出。
-
-常用项：
-
-| 参数 / config.json 键 | 默认 | 说明 |
+| 配置键 | 默认/示例 | 说明 |
 | --- | --- | --- |
-| `wake_word.model` | `hey_jarvis` | 唤醒词；可选捆绑的 `world_activate` |
-| `wake_word.threshold` | `0.5` | 唤醒灵敏度（越低越敏感） |
-| `wake_word.cooldown` | `2.0` | 上一条命令结束后忽略重复唤醒的秒数 |
-| `vad.silence_duration` | `3.0` | 说完后静音多久停止录音（秒） |
-| `executor.codex_window_title` | `Codex` | 窗口标题匹配子串 |
-| `executor.codex_launch_command` | `""` | 窗口缺失时执行的启动命令 |
-| `stt.whisper_model_size` | `small` | 可升级 `medium` / `large-v3` |
+| `wake_word.model` | `hey_jarvis` | 唤醒词模型，可选 `world_activate` |
+| `wake_word.threshold` | `0.5` | 唤醒灵敏度 |
+| `vad.silence_duration` | `3.0` | 说完后静音多久自动停录 |
+| `executor.default_target` | `codex` | 默认发送目标 |
+| `executor.codex_window_title` | `Codex` | Codex 窗口标题匹配 |
+| `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT 窗口标题匹配 |
+| `executor.cursor_window_title` | `Cursor` | Cursor 窗口标题匹配 |
+| `stt.whisper_model_size` | `small` | 可升级为 `medium` / `large-v3` |
 | `tts.enabled` | `true` | Windows SAPI 状态短句播报 |
-| `hotkeys.record_hotkey` | `f9` | 热键模式录音键；唤醒循环中也可手动停录 |
+| `hotkeys.record_hotkey` | `f9` | 录音热键 |
 
 ## 项目结构
 
 ```text
 config.json
 src/voicecontrol/
-├── main.py           CLI 入口（--once / --vad / --wake / --no-send）
-├── tray_app.py       系统托盘常驻
-├── config/           settings.py, manager.py
-├── audio/            麦克风、录音
-├── stt/              faster-whisper
-├── vad/              Silero VAD 端点检测
-├── wake_word/        openWakeWord + models/world_activate.onnx
-├── executor/         Codex 窗口聚焦 + 粘贴
-├── pipeline/         流程编排、状态事件
-├── control/          托盘文件命令（logs/runtime/control_command.json）
-├── events/           状态 pub/sub + runtime 状态快照
-├── history/          命令历史 JSONL
-├── diagnostics/      自测工具
-├── tts/              Windows SAPI 状态播报
-├── ui/               PySide6 控制中心界面
-│   ├── desktop_pet.py     桌宠悬浮窗
-│   └── desktop_pet_app.py 桌宠启动入口
-└── utils/            蜂鸣、开机自启、热键
+├── main.py
+├── tray_app.py
+├── config/
+├── audio/
+├── stt/
+├── vad/
+├── wake_word/
+├── executor/
+│   ├── app_driver.py
+│   ├── router.py
+│   ├── codex_driver.py
+│   ├── chatgpt_driver.py
+│   ├── cursor_driver.py
+│   └── window_utils.py
+├── pipeline/
+├── control/
+├── events/
+├── history/
+├── diagnostics/
+├── tts/
+├── ui/
+└── utils/
 logs/
-├── tray/             按日托盘日志（YYYYMMDD_voicecontrol.log）
-├── history/          command_history.jsonl
-├── diagnostics/      diagnostics.jsonl
-└── runtime/          runtime_status.json、control_command.json
+├── tray/
+├── history/
+├── diagnostics/
+└── runtime/
 ```
 
 ## 功能状态
 
-**已实现**
+已实现：
 
-- 麦克风录音与 faster-whisper 语音转写（中/英）
-- 热键触发（F9 开始/停止）与 VAD 静音自动停录
-- 唤醒词（`hey_jarvis` / 捆绑 `world_activate`）+ 系统托盘后台常驻
-- 托盘手动录音、暂停/恢复、开机自启、双击打开设置
-- 自动聚焦 Codex Desktop 并粘贴命令；可选自动启动 Codex
-- PySide6 控制中心（`config.json`）
-- Windows SAPI 流水线状态 TTS（短句）
-- runtime 状态快照（`logs/runtime/runtime_status.json`），录音页每秒刷新
-- 命令历史（`logs/history/command_history.jsonl`）与重发上一条
-- 桌宠最小悬浮窗：透明置顶、可拖动、托盘显示/隐藏、右键暂停/恢复、点击打开控制中心、记住位置、可关闭动画、根据 runtime 状态切换文字表情
+- 麦克风录音与 faster-whisper 转写
+- F9 热键录音与 VAD 自动停录
+- openWakeWord 唤醒词和托盘后台
+- Codex / ChatGPT / Cursor 桌面 driver
+- 默认目标应用路由
+- AppsFolder 启动命令配置
+- PySide6 控制中心
+- Windows SAPI 状态 TTS
+- runtime 状态快照
+- 命令历史与重发
+- 桌宠状态窗口
+- 诊断页和日志页
 
-**计划中**
+计划中：
 
-- ChatGPT / Cursor 驱动 · LLM 路由 · 朗读 Codex 回复全文 · 安装包等
+- 桌面小任务能力
+- 桌宠自定义形象
+- 打包启动体验
+- 稳定性/诊断增强
+- 更智能的语音路由
+- CLI agent driver
+- Trae driver/router
 
 ## 开发文档
 
-- Agent 指南：[`AGENTS.md`](AGENTS.md)（英文，供 AI Agent 使用）
-- 中文说明：[`AGENTS_CN.md`](AGENTS_CN.md)
+- Agent 指南：[AGENTS.md](AGENTS.md)
+- Agent 中文说明：[AGENTS_CN.md](AGENTS_CN.md)
+- English README：[README_EN.md](README_EN.md)

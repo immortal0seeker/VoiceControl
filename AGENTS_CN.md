@@ -1,28 +1,27 @@
-# AGENTS_CN.md — VoiceControl
+# AGENTS_CN.md - VoiceControl
 
-> 本文档为 [`AGENTS.md`](AGENTS.md) 的中文版，供人类阅读；Agent 仍以英文版为准。
+> 本文件是 [`AGENTS.md`](AGENTS.md) 的中文说明版。Agent 工作时仍以英文版为准。
 
-面向 Windows 11 的语音驱动 AI 桌面助手。本地 Python 项目；**MVP 已交付**，并持续扩展（设置界面、TTS 状态播报、诊断、命令历史等）。
+VoiceControl 是面向 Windows 11 的本地语音驱动桌面自动化助手。MVP 已交付，当前 post-MVP 工作重点是多目标执行器、设置 UI、TTS 状态提示、诊断、命令历史和桌宠体验。
 
 端到端目标：
 
 ```text
-说话 → 唤醒词 → 录音 → 语音转文字 → 路由命令
-     → 发送到 Codex / ChatGPT / Cursor → 执行任务 → 可选 TTS
+说话 -> 唤醒词 -> 录音 -> 语音转文字 -> 路由命令
+     -> 发送到 Codex / ChatGPT / Cursor -> 执行任务 -> 可选 TTS
 ```
 
-这是一个**由语音驱动的本地桌面自动化系统**，不是通用聊天机器人。
+这是一个由语音驱动的本地桌面自动化系统，不是通用聊天机器人。
 
 ---
 
 ## 1. 环境
 
 ```text
-操作系统   Windows 11
-Python     3.11+  （仅使用 .venv — 切勿使用全局 Python）
-GPU        推荐 NVIDIA CUDA（8 GB+ 显存可跑 Whisper small/medium）
-           支持 CPU 兜底（int8）
-Shell      PowerShell  （链式命令用 ';'，不要用 '&&'）
+系统       Windows 11
+Python     3.11+（只使用 .venv，不使用全局 Python）
+GPU        推荐 NVIDIA CUDA；支持 CPU int8 兜底
+Shell      PowerShell（链式命令用 ';'，不要用 '&&'）
 ```
 
 在 `.venv` 内安装：
@@ -32,263 +31,242 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-可编辑安装会把项目注册为 `voicecontrol` 包，之后可在任意目录用
-`python -m voicecontrol.*` 运行。
+可编辑安装会注册 `voicecontrol` 包，之后可以在任意目录运行 `python -m voicecontrol.*`。
 
 ---
 
-## 2. 项目决策（勿重复询问）
+## 2. 项目决策
 
 | 主题 | 决策 |
-|------|------|
+| --- | --- |
 | STT 引擎 | `faster-whisper` |
-| 语言 | 中文为主 + 英文（多语言模型） |
-| 默认模型 | `small`（升级路径：`medium` → `large-v3`） |
-| 计算设备 | GPU 优先：`device="cuda"`，`compute_type="float16"`；CPU 兜底（`int8`） |
-| 用户配置 | 根目录 `config.json` 经 `config/manager.py` 与代码默认值合并；`settings.py` 导出合并后的值 |
-| Executor 目标（按顺序） | Codex Desktop → ChatGPT Desktop → Cursor → 其它（仅 Codex 已实现）|
-| Executor 设计 | 可插拔 `AppDriver` 接口，每个目标应用一个驱动 |
-| VAD 引擎 | 复用 faster-whisper 内置 Silero VAD ONNX（onnxruntime，无 torch） |
-| 唤醒词引擎 | openWakeWord（ONNX/onnxruntime）；内置 `hey_jarvis` 或捆绑自定义 `world_activate.onnx` — 唤醒词仅做激活，命令仍可中文 |
-| TTS | Windows SAPI（`pywin32` / `tts/speaker.py`）；流水线状态的**短句播报**（非朗读 Codex 回复全文） |
-| 后台模式 | 系统托盘 `pythonw` + HKCU Run 开机自启。**不是** Windows Service（Session 0 无法操作桌面） |
-| 进程间控制 | `logs/runtime/control_command.json` 文件命令（开始/停止录音、暂停/恢复监听），由托盘守护进程消费 |
+| 语言 | 中文为主 + 英文，使用多语言模型 |
+| 默认 STT 模型 | `small`；升级路径：`medium` -> `large-v3` |
+| 计算 | GPU 优先：`cuda` / `float16`；CPU 兜底：`int8` |
+| 用户配置 | 根目录 `config.json` 覆盖代码默认值；`config/manager.py` 合并；`settings.py` 导出 |
+| Executor 目标 | Codex Desktop、ChatGPT Desktop、Cursor；Trae 目前只有启动命令配置，还没有 driver/router |
+| Executor 设计 | 可插拔 `AppDriver`；复用 `LaunchableAppDriver`；由 `executor/router.py` 选择目标 |
+| VAD | faster-whisper 附带的 Silero VAD ONNX，通过 onnxruntime 使用 |
+| 唤醒词 | openWakeWord ONNX；内置 `hey_jarvis` 或自定义 `world_activate.onnx` |
+| TTS | Windows SAPI via `pywin32`；只播报短状态提示，不朗读完整回复 |
+| 后台模式 | `pythonw` 托盘程序；HKCU Run 开机自启；不是 Windows Service |
+| 进程间控制 | `logs/runtime/control_command.json` 文件命令，由托盘守护进程消费 |
 
 ---
 
 ## 3. 已交付功能
 
 ```text
-调试 CLI 单次录音   python -m voicecontrol.main --once
-调试 CLI 热键触发   F9 开始/停止（默认循环），Esc 退出
-VAD 自动停录        热键循环加 --vad
-唤醒词 + 托盘       --wake（前台）或 pythonw -m voicecontrol.tray_app
-Codex 发送          聚焦 → 点输入框 → 粘贴 → Enter；可选自动启动 Codex
-控制中心 (PySide6)  python -m voicecontrol.ui.settings_app（托盘菜单 / 双击托盘也可打开）
-桌面宠物 (PySide6)  pythonw -m voicecontrol.ui.desktop_pet_app
-开机自启            托盘菜单开关（HKCU Run）
-TTS 状态播报        「我在」「请说」「正在识别」… 随流水线状态触发
-runtime 状态        logs/runtime/runtime_status.json 状态快照
-桌宠体验            位置保存在 logs/runtime/desktop_pet_state.json；设置页可关闭动画
-命令历史            logs/history/command_history.jsonl 追加写入
-诊断工具            设置页：麦克风 / VAD / 唤醒词 / TTS / Codex 发送测试、日志查看
-手动录音            托盘菜单或设置页 → 文件控制命令 → 跳过唤醒词直接录命令
-自定义唤醒词        捆绑 world_activate.onnx，可在 config.json / 设置页选择
+调试 CLI 单次录音       python -m voicecontrol.main --once
+调试 CLI 热键触发       F9 开始/停止，Esc 退出
+VAD 自动停录            热键循环加 --vad
+唤醒词 + 托盘           --wake 或 pythonw -m voicecontrol.tray_app
+目标应用路由            executor.default_target = codex / chatgpt / cursor
+Codex driver            聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
+ChatGPT driver          聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
+Cursor driver           聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
+控制中心                python -m voicecontrol.ui.settings_app
+桌宠                    pythonw -m voicecontrol.ui.desktop_pet_app
+开机自启                托盘菜单切换
+TTS 状态提示            按流水线事件播报短句
+Runtime 状态            logs/runtime/runtime_status.json
+命令历史                logs/history/command_history.jsonl
+诊断                    麦克风 / VAD / 唤醒词 / TTS / 默认目标发送测试
+手动录音                托盘或设置页写入控制命令，跳过唤醒词
+自定义唤醒词            bundled world_activate.onnx
 ```
 
 典型生产流程：
 
 ```text
-托盘常驻 → openWakeWord 听到唤醒词 → 蜂鸣（+ 可选 TTS「我在」）
-→ 录命令（VAD 自动停；F9 或托盘可提前结束）
-→ 转写 → 发送到 Codex → 写历史 + 完成提示（+ 可选 TTS「已发送」）
-托盘菜单：暂停/恢复 · 开始/停止录音 · 打开设置 · 显示/隐藏桌宠 · 开关开机自启 · 退出
-桌宠：右键暂停/恢复 · 打开控制中心 · 退出
-双击托盘图标：打开设置/控制中心
+托盘守护 -> 听到唤醒词 -> 蜂鸣/TTS 提示 -> 录音 -> 转写
+-> 路由到配置的 AppDriver -> 粘贴发送 -> 写历史 + 完成提示
 ```
 
-运行命令（PowerShell）：
+运行命令：
 
 ```powershell
-.venv\Scripts\python.exe -m voicecontrol.main --wake          # 前台调试
+.venv\Scripts\python.exe -m voicecontrol.main --wake
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
-.venv\Scripts\pythonw.exe -m voicecontrol.tray_app             # 无控制台托盘后台
-.venv\Scripts\python.exe -m voicecontrol.ui.settings_app      # 控制中心界面
-.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app  # 桌宠
+.venv\Scripts\pythonw.exe -m voicecontrol.tray_app
+.venv\Scripts\python.exe -m voicecontrol.ui.settings_app
+.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
 ```
 
-日志（托盘模式）：`logs/tray/YYYYMMDD_voicecontrol.log`（按自然日一个文件）。
-控制中心导航：录音、设置、诊断、命令历史、日志查看。
-`main.py` 是前台调试 CLI；日常后台模式使用 `tray_app.py`。
+托盘日志：`logs/tray/YYYYMMDD_voicecontrol.log`。
 
 ---
 
 ## 4. 仓库结构
 
-按需懒创建文件 — 不要提前搭建空模块脚手架。
-
-采用 src-layout：可导入包 `voicecontrol` 位于 `src/` 下（`pip install -e .` 后生效）；
-一律用绝对导入 `voicecontrol.*`，不要用 `src.*`。
+按需创建文件，不提前搭空模块。始终使用 `voicecontrol.*` 绝对导入，不使用 `src.*`。
 
 ```text
 VoiceControl/
-├── .venv/
-├── config.json                 用户 JSON 配置（覆盖代码默认值）
-├── audio_files/                recordings/  temp/  samples/   （调试音频，git 忽略）
-├── logs/                       tray/、history/、diagnostics/、runtime/（git 忽略）
-│   ├── tray/                   按日托盘日志
-│   ├── history/                command_history.jsonl
-│   ├── diagnostics/            diagnostics.jsonl
-│   └── runtime/                runtime_status.json、control_command.json
-├── pyproject.toml              包定义（src-layout，含 console script、package-data）
-├── src/voicecontrol/
-│   ├── main.py                 CLI 入口：--once / --vad / --wake / --no-send
-│   ├── tray_app.py             无控制台系统托盘常驻
-│   ├── audio/                  device_manager, recorder（StreamRecorder, MicFrameStream）
-│   ├── stt/                    whisper_engine
-│   ├── wake_word/              detector, models.py, models/*.onnx
-│   ├── vad/                    silero_vad（增量端点检测）
-│   ├── executor/               app_driver（基类）, codex_driver, window_utils
-│   ├── pipeline/               orchestrator（VoiceOrchestrator, run_wake_loop）
-│   ├── config/                 settings.py, manager.py
-│   ├── control/                托盘守护进程消费的文件命令
-│   ├── events/                 状态发布 + runtime 状态快照
-│   ├── history/                命令历史存储 + 重发
-│   ├── diagnostics/            麦克风 / VAD / 唤醒词 / TTS / Codex 发送测试、日志读取、诊断结果存储
-│   ├── tts/                    Windows SAPI 播报 + 状态订阅
-│   ├── ui/                     PySide6 控制中心 UI
-│   │   ├── desktop_pet.py      透明置顶桌宠悬浮窗
-│   │   ├── desktop_pet_app.py  桌宠 QApplication 入口
-│   │   ├── launcher.py         小型 UI 进程启动辅助
-│   │   ├── settings_app.py     QApplication 入口
-│   │   ├── settings_window.py  导航壳（侧栏 + QStackedWidget）
-│   │   ├── config_binding.py   配置读写辅助 + Binding 类型
-│   │   ├── style.py            Apple 风格 QSS 样式表
-│   │   ├── widgets.py          可复用表单控件（card, switch, combo 等）
-│   │   ├── assets.py           资源路径解析
-│   │   └── pages/              每个页面一个 QWidget 子类
-│   │       ├── base.py         page_layout 脚手架 + PlaceholderPage
-│   │       ├── status_page.py
-│   │       ├── recording_page.py
-│   │       ├── settings_page.py
-│   │       ├── diagnostics_page.py
-│   │       ├── command_history_page.py
-│   │       ├── logs_page.py
-│   │       └── background_page.py
-│   └── utils/                  feedback（蜂鸣）, autostart, hotkeys
+├── config.json
+├── audio_files/                 recordings/, temp/, samples/（git 忽略）
+├── logs/                        tray/, history/, diagnostics/, runtime/（git 忽略）
+├── pyproject.toml
 ├── requirements.txt
 ├── README.md
 ├── README_EN.md
 ├── AGENTS.md
-└── AGENTS_CN.md
+├── AGENTS_CN.md
+└── src/voicecontrol/
+    ├── main.py
+    ├── tray_app.py
+    ├── audio/
+    ├── stt/
+    ├── vad/
+    ├── wake_word/
+    ├── executor/
+    │   ├── app_driver.py        AppDriver + LaunchableAppDriver
+    │   ├── router.py            create_driver / get_default_driver
+    │   ├── codex_driver.py
+    │   ├── chatgpt_driver.py
+    │   ├── cursor_driver.py
+    │   └── window_utils.py
+    ├── pipeline/
+    ├── config/
+    ├── control/
+    ├── events/
+    ├── history/
+    ├── diagnostics/
+    ├── tts/
+    ├── ui/
+    └── utils/
 ```
 
-模块边界（职责分离）：
+模块边界：
 
-- `audio/` — 列出设备、录音、保存/播放 WAV、校验。不含 STT/VAD/唤醒词逻辑。
-- `stt/` — 加载模型、转写文件、规范化结果。不含麦克风逻辑。
-- `executor/` — 聚焦窗口、发送文本、模拟输入。不含 STT/录音逻辑。
-- `pipeline/` — 编排各切片；调用下层模块，不重复实现。
-- `config/` — 默认值在 `settings.py`；用户覆盖在 `config.json`，经 `manager.py` 合并。
-- `control/` — 基于文件的 IPC，供托盘守护进程消费。
-- `events/` — 进程内状态 pub/sub + 文件化 runtime 状态，连接 pipeline、托盘、TTS、设置 UI。
-- `history/` — 追加式命令历史；设置页可重发上一条。
-- `diagnostics/` — 麦克风、VAD、唤醒词、TTS、Codex 发送自测工具，在设置 UI 中暴露。
-- `tts/` — Windows SAPI 封装与状态短句订阅。
-- `ui/` — PySide6 控制中心窗口；不含 pipeline 逻辑。
-- `utils/` — 仅放无处归属的代码。
+- `audio/`：设备列表、录音、保存/播放 WAV、音频校验；不放 STT/VAD/唤醒词逻辑。
+- `stt/`：加载 Whisper、转写文件、规范化结果；不放麦克风逻辑。
+- `executor/`：聚焦目标窗口、发送文本、模拟输入；不放录音/STT 逻辑。
+- `pipeline/`：编排下层模块；依赖 `AppDriver`，不依赖具体 driver。
+- `config/`：默认值和用户配置合并。
+- `control/`：文件式托盘 IPC 命令。
+- `events/`：状态 pub/sub 和 runtime 状态快照。
+- `history/`：追加式命令历史和重发。
+- `diagnostics/`：设置 UI 中的自测工具。
+- `tts/`：Windows SAPI 状态短句。
+- `ui/`：PySide6 控制中心和桌宠；不放 pipeline 逻辑。
+- `utils/`：仅放无处归属的通用辅助。
 
 ---
 
-## 5. 关键默认值（config）
+## 5. 关键配置
 
-代码默认值在 `settings.py`；运行时以合并后的 `config.json` 为准。
-通过设置 UI 或手改 `config.json` 后，需**重启托盘/监听进程**。
+运行值来自合并后的 `config.json`。修改后需要重启托盘/监听进程。
 
 ```python
 SAMPLE_RATE = 16000
 CHANNELS = 1
 WHISPER_MODEL_SIZE = "small"
-WHISPER_DEVICE = "cuda"          # 兜底 "cpu"
-WHISPER_COMPUTE_TYPE = "float16" # 兜底 "int8"
+WHISPER_DEVICE = "cuda"
+WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
-WAKE_WORD_MODEL = "hey_jarvis"   # 或捆绑的 "world_activate"
+WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
+DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor
 CODEX_WINDOW_TITLE = "Codex"
-CODEX_LAUNCH_COMMAND = ""        # 可选；窗口缺失时启动 Codex
-TTS_ENABLED = True               # Windows SAPI 状态短句
-RECORD_HOTKEY = "f9"             # 唤醒循环录音时也可手动停止
+CHATGPT_WINDOW_TITLE = "ChatGPT"
+CURSOR_WINDOW_TITLE = "Cursor"
+TTS_ENABLED = True
+RECORD_HOTKEY = "f9"
 ```
 
-STT 模块至少需支持：
-
-```python
-def transcribe_file(path: str | Path) -> str: ...
-# 后续: def transcribe_array(audio: np.ndarray, sample_rate: int) -> str: ...
-```
+`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。现在只有 Codex、ChatGPT、Cursor 可作为路由目标。
 
 ---
 
 ## 6. Executor 设计
 
-计划对接多个目标应用，因此使用轻量驱动抽象（这是有依据的抽象，并非过度设计）。
+不要在 pipeline/history/diagnostics 中硬编码目标应用，统一走 driver 抽象和 router。
 
 ```python
 class AppDriver:
-    """每个目标应用一个驱动（Codex、ChatGPT、Cursor、...）。"""
-    def focus(self) -> None: ...
-    def send_prompt(self, text: str) -> None: ...   # 优先剪贴板粘贴 + Enter
-```
+    app_name: str
+    window_title: str
+    def focus(self) -> Window: ...
+    def send_prompt(self, text: str, auto_enter: bool | None = None) -> None: ...
 
-`CodexDriver` 还支持 `CODEX_LAUNCH_COMMAND`：找不到窗口时执行配置命令并轮询直到标题出现。
+class LaunchableAppDriver(AppDriver):
+    launch_command: str
+    launch_timeout: float
+    launch_poll_interval: float
+```
 
 规则：
 
-- 先实现 Codex Desktop；其它应用后续以驱动形式添加。
-- 优先**剪贴板粘贴**，而非逐字输入（中文 / 长提示词）。
-- 每次桌面操作前后加短延迟并打清晰日志。
-- 注意：Alt+Tab 不稳定、输入法问题、焦点丢失、管理员权限边界、编辑器截获热键。
-
-按需使用的工具：`pyperclip`、`pywin32`、`keyboard`。
+- 默认目标通过 `voicecontrol.executor.router.get_default_driver()` 获取。
+- 显式目标通过 `create_driver("codex" | "chatgpt" | "cursor")` 创建。
+- 优先用剪贴板粘贴，而不是逐字输入。
+- 桌面操作前后保留短延迟和清晰日志。
+- 注意焦点丢失、输入法、管理员权限边界、编辑器热键截获。
 
 ---
 
-## 7. 编码规范
+## 7. 编码规则
 
-- 简单、可读的 Python；小函数；显式优于取巧。
-- 公开函数/方法尽量加类型注解。
-- 路径用 `pathlib.Path`。除 `config/` 外不硬编码路径。
-- 可复用模块用 `logging`；`print` 仅用于 CLI 入口和 `__main__` 调试块。
-- 命名：`snake_case` 文件/函数/变量/模块，`PascalCase` 类，`UPPER_CASE` 常量。
-- 除非明确需要，避免全局可变状态。
+- 简单、可读、小函数，显式优先。
+- 公共函数/方法尽量加类型提示。
+- 路径用 `pathlib.Path`。
+- 可复用模块用 `logging`；`print` 只用于 CLI/debug 入口。
+- 命名：文件/函数/变量/模块用 `snake_case`，类用 `PascalCase`，常量用 `UPPER_CASE`。
+- 避免不必要的全局可变状态。
+- 工作区可能有用户改动；不要回滚无关修改。
 
 ---
 
 ## 8. 错误处理
 
-显式处理 Windows 失败场景 — 切勿静默吞掉：
+显式处理 Windows 失败场景，不要静默吞掉：
 
 ```text
-麦克风不可用 · 无效设备索引 · 音频文件缺失
-模型加载失败 · 转写结果为空 · 窗口未找到
-权限被拒绝 · 热键冲突 · TTS/SAPI 不可用
+麦克风不可用、设备索引无效、音频文件缺失、
+模型加载失败、转写为空、窗口未找到、
+启动失败、权限拒绝、热键冲突、TTS/SAPI 不可用
 ```
 
-可复用模块：抛出清晰异常或记录日志。CLI 入口：打印错误即可。
-
-音频规则：始终支持手动测试；尽早保存调试 WAV；优雅处理麦克风缺失；不要假设默认设备正确；提供设备列表函数。
+可复用模块应抛出清晰异常或记录日志。CLI 入口可以打印用户可读错误。
 
 ---
 
-## 9. 依赖管理
+## 9. 依赖
 
-所有运行时依赖在 `requirements.txt` 中，并与 `pyproject.toml` 同步。
-有意添加：说明原因、优先稳定/常用包、不重复。
+运行依赖在 `requirements.txt`，并与 `pyproject.toml` 同步。新增依赖要有明确理由，优先稳定常用包，避免重复。
 
-捆绑资源（`pyproject.toml` package-data）：`ui/assets/*`、`wake_word/models/*`。
-
----
-
-## 10. 当前不在范围内
+打包资源：
 
 ```text
-完整对话式 TTS（朗读 Codex 回复全文）
-Obsidian · Computer Use · LLM 路由 · 多 Agent
-安装包打包
-真正的 Windows Service（Session 0 无法驱动桌面 — 用托盘应用）
-ChatGPT/Cursor 驱动（计划以新 AppDriver 子类形式添加）
-transcribe_array（不落盘 WAV 的内存转写）
+ui/assets/*
+wake_word/models/*
+```
+
+---
+
+## 10. 暂不在范围内
+
+```text
+完整对话式 TTS
+LLM 意图路由
+CLI agent driver
+打包安装器
+首次运行自动发现应用
+真正 Windows Service
+Trae driver/router
+transcribe_array
 ```
 
 ---
 
 ## 11. Agent 行为准则
 
-1. 先读 `README.md` 和本文件；创建文件前先查看目录结构。
-2. 做最小有用改动；每一步都保持代码可运行。
-3. 一个可运行的垂直切片，胜过许多半成品模块。
-4. 保持命名约定；不重写无关文件。
-5. 给出用户应运行的确切 PowerShell 命令。
+1. 先读 `README.md` 和本文件；创建文件前先看目录结构。
+2. 做最小有用改动，并保持项目可运行。
+3. 一个能工作的垂直切片胜过多个半成品模块。
+4. 保持命名约定，不重写无关文件。
+5. 给出用户应运行的准确 PowerShell 命令。
 6. 对不确定的 Windows 音频行为，先写诊断脚本。
 
-开发哲学：**先跑起来 → 可观测 → 稳定 → 快速 → 智能。**
+开发哲学：先跑起来 -> 可观察 -> 稳定 -> 快 -> 智能。

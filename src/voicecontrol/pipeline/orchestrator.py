@@ -20,7 +20,7 @@ from voicecontrol.audio.recorder import MicFrameStream, StreamRecorder, save_wav
 from voicecontrol.config import settings
 from voicecontrol.events.status import StatusPublisher, StatusType, default_status_publisher
 from voicecontrol.executor.app_driver import AppDriver
-from voicecontrol.executor.codex_driver import CodexDriver
+from voicecontrol.executor.router import get_default_driver
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.history.store import CommandHistoryRecord, append_command_history
 from voicecontrol.stt.whisper_engine import WhisperEngine
@@ -53,7 +53,7 @@ class VoiceOrchestrator:
         status_publisher: StatusPublisher | None = None,
     ) -> None:
         self.engine = engine or WhisperEngine()
-        self.driver = driver or CodexDriver()
+        self.driver = driver or get_default_driver()
         self.send_enabled = send_enabled
         self.status_publisher = status_publisher or default_status_publisher
 

@@ -12,6 +12,15 @@ from voicecontrol.pipeline.orchestrator import VoiceOrchestrator
 
 
 class PipelineStatusEventTests(unittest.TestCase):
+    def test_orchestrator_uses_default_driver_from_router(self) -> None:
+        engine = Mock()
+        driver = Mock()
+
+        with patch("voicecontrol.pipeline.orchestrator.get_default_driver", return_value=driver):
+            orchestrator = VoiceOrchestrator(engine=engine)
+
+        self.assertEqual(orchestrator.driver, driver)
+
     def test_process_audio_publishes_transcribing_sending_done(self) -> None:
         publisher = StatusPublisher()
         events: list[StatusType] = []

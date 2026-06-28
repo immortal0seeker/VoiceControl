@@ -1,15 +1,15 @@
-# AGENTS.md — VoiceControl
+# AGENTS.md - VoiceControl
 
-Voice-driven AI desktop assistant for Windows 11. Local Python project; **MVP shipped**, with ongoing post-MVP features (settings UI, TTS status cues, diagnostics, command history).
+VoiceControl is a local Windows 11 voice-driven desktop automation assistant. The MVP has shipped, and the current post-MVP work focuses on multi-target executors, settings UI, status TTS cues, diagnostics, command history, and desktop-pet UX.
 
 End-to-end goal:
 
 ```text
-speak → wake word → record → speech-to-text → route command
-      → send to Codex / ChatGPT / Cursor → execute task → optional TTS
+speak -> wake word -> record -> speech-to-text -> route command
+      -> send to Codex / ChatGPT / Cursor -> execute task -> optional TTS
 ```
 
-This is a **local desktop automation system driven by voice**, not a generic chatbot.
+This is a local desktop automation system driven by voice, not a generic chatbot.
 
 ---
 
@@ -17,10 +17,9 @@ This is a **local desktop automation system driven by voice**, not a generic cha
 
 ```text
 OS         Windows 11
-Python     3.11+  (.venv only — never use global Python)
-GPU        NVIDIA CUDA recommended (8 GB+ VRAM for small/medium Whisper)
-           CPU fallback supported (int8)
-Shell      PowerShell  (use ';' to chain commands, NOT '&&')
+Python     3.11+  (.venv only; never use global Python)
+GPU        NVIDIA CUDA recommended; CPU int8 fallback supported
+Shell      PowerShell  (use ';' to chain commands, not '&&')
 ```
 
 Install inside `.venv`:
@@ -30,27 +29,26 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-The editable install registers the `voicecontrol` package so
-`python -m voicecontrol.*` works from any directory.
+The editable install registers the `voicecontrol` package so `python -m voicecontrol.*` works from any directory.
 
 ---
 
-## 2. Project Decisions (do not re-ask)
+## 2. Project Decisions
 
 | Topic | Decision |
-|-------|----------|
+| --- | --- |
 | STT engine | `faster-whisper` |
-| Languages | Chinese-primary + English (multilingual model) |
-| Default model | `small` (upgrade path: `medium` → `large-v3`) |
-| Compute | GPU first: `device="cuda"`, `compute_type="float16"`; CPU fallback (`int8`) |
-| User config | Root `config.json` merged over code defaults via `config/manager.py`; `settings.py` re-exports merged values |
-| Executor targets (in order) | Codex Desktop → ChatGPT Desktop → Cursor → others (only Codex implemented) |
-| Executor design | Pluggable `AppDriver` interface, one driver per target app |
-| VAD engine | Silero VAD ONNX bundled with faster-whisper (via onnxruntime, no torch) |
-| Wake word engine | openWakeWord (ONNX/onnxruntime); built-in `hey_jarvis` or bundled custom `world_activate.onnx` — wake word only gates activation; commands stay Chinese |
-| TTS | Windows SAPI via `pywin32` (`tts/speaker.py`); short **status phrases** on pipeline events (not full read-back of Codex replies) |
-| Background mode | Tray app via `pythonw`, launch-at-logon through HKCU Run key. NOT a Windows Service (session 0 cannot drive the desktop) |
-| Inter-process control | File-based commands in `logs/runtime/control_command.json` (start/stop recording, pause/resume listening) consumed by tray daemon |
+| Languages | Chinese-primary + English, using a multilingual model |
+| Default STT model | `small`; upgrade path: `medium` -> `large-v3` |
+| Compute | GPU first: `device="cuda"`, `compute_type="float16"`; CPU fallback: `int8` |
+| User config | Root `config.json` merged over defaults via `config/manager.py`; `settings.py` exports merged values |
+| Executor targets | Codex Desktop, ChatGPT Desktop, Cursor; Trae launch config is present but no driver/router support yet |
+| Executor design | Pluggable `AppDriver`; reusable `LaunchableAppDriver`; `executor/router.py` selects the configured target |
+| VAD engine | Silero VAD ONNX bundled through faster-whisper / onnxruntime, no torch |
+| Wake word engine | openWakeWord ONNX; built-in `hey_jarvis` or bundled custom `world_activate.onnx` |
+| TTS | Windows SAPI via `pywin32`; short status phrases only, not full reply read-back |
+| Background mode | Tray app via `pythonw`; launch-at-logon via HKCU Run key; not a Windows Service |
+| Inter-process control | File commands in `logs/runtime/control_command.json`, consumed by the tray daemon |
 
 ---
 
@@ -58,224 +56,206 @@ The editable install registers the `voicecontrol` package so
 
 ```text
 Debug CLI recording         python -m voicecontrol.main --once
-Debug CLI hotkey trigger    F9 start/stop (default loop), Esc quit
+Debug CLI hotkey trigger    F9 start/stop, Esc quit
 VAD auto-stop               --vad flag on hotkey loop
-Wake word + tray daemon     --wake (foreground) or pythonw -m voicecontrol.tray_app
-Codex Desktop executor      focus → click composer → paste → Enter; optional auto-launch
-Control center (PySide6)    python -m voicecontrol.ui.settings_app  (also from tray menu / tray double-click)
-Desktop pet (PySide6)       pythonw -m voicecontrol.ui.desktop_pet_app
-Launch at logon             tray menu toggle (HKCU Run)
-TTS status cues             "我在" / "请说" / "正在识别" / … on pipeline status events
-Runtime status              JSON snapshot under logs/runtime/runtime_status.json
-Desktop pet UX              remembers logs/runtime/desktop_pet_state.json; animation can be disabled in settings
-Command history             append-only JSONL under logs/history/command_history.jsonl
-Diagnostics                 mic / VAD / wake-word / TTS / Codex-send tests in settings UI
-Manual recording            tray menu or settings UI → file control command → skip wake word
-Custom wake word            bundled world_activate.onnx selectable in config.json / settings UI
+Wake word + tray daemon     --wake or pythonw -m voicecontrol.tray_app
+Executor routing            codex / chatgpt / cursor selected by executor.default_target
+Codex driver                focus -> click composer -> paste -> Enter; optional auto-launch
+ChatGPT driver              focus -> click composer -> paste -> Enter; optional auto-launch
+Cursor driver               focus -> click composer -> paste -> Enter; optional auto-launch
+Control center              python -m voicecontrol.ui.settings_app
+Desktop pet                 pythonw -m voicecontrol.ui.desktop_pet_app
+Launch at logon             tray menu toggle
+TTS status cues             short pipeline event phrases
+Runtime status              logs/runtime/runtime_status.json
+Command history             logs/history/command_history.jsonl
+Diagnostics                 mic / VAD / wake-word / TTS / target-send tests
+Manual recording            tray/settings control command, bypassing wake word
+Custom wake word            bundled world_activate.onnx
 ```
 
 Typical production flow:
 
 ```text
-always-on tray daemon → openWakeWord hears wake word → beep cue (+ optional TTS "我在")
-→ record command (VAD auto-stop; F9 or tray can stop early)
-→ transcribe → send to Codex → history + done cue (+ optional TTS "已发送")
-tray menu: pause/resume · start/stop recording · open settings · show/hide desktop pet · toggle launch-at-logon · quit
-desktop pet: right-click pause/resume · open control center · quit
-tray double-click: open settings/control center
+tray daemon -> wake word -> beep/TTS cue -> record command -> transcribe
+-> route to configured AppDriver -> paste/send -> history + done cue
 ```
 
-Run commands (PowerShell):
+Run commands:
 
 ```powershell
-.venv\Scripts\python.exe -m voicecontrol.main --wake          # foreground debug
+.venv\Scripts\python.exe -m voicecontrol.main --wake
 .venv\Scripts\python.exe -m voicecontrol.main --wake --no-send
-.venv\Scripts\pythonw.exe -m voicecontrol.tray_app             # headless tray daemon
-.venv\Scripts\python.exe -m voicecontrol.ui.settings_app      # control center UI
-.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app  # desktop pet
+.venv\Scripts\pythonw.exe -m voicecontrol.tray_app
+.venv\Scripts\python.exe -m voicecontrol.ui.settings_app
+.venv\Scripts\pythonw.exe -m voicecontrol.ui.desktop_pet_app
 ```
 
-Logs (tray mode): `logs/tray/YYYYMMDD_voicecontrol.log` (one file per calendar day).
-Control center navigation: Recording, Settings, Diagnostics, Command History, Logs.
-`main.py` is a foreground debug CLI; use `tray_app.py` for daily background mode.
+Logs in tray mode: `logs/tray/YYYYMMDD_voicecontrol.log`.
 
 ---
 
 ## 4. Repository Structure
 
-Create files lazily — do not scaffold empty modules ahead of need.
+Create files lazily. Do not scaffold empty modules ahead of need.
 
-Packaged as a src-layout `voicecontrol` package (importable after
-`pip install -e .`); always use absolute `voicecontrol.*` imports, never `src.*`.
+Always use absolute `voicecontrol.*` imports, never `src.*`.
 
 ```text
 VoiceControl/
-├── .venv/
-├── config.json                 user-facing JSON config (merged over defaults)
-├── audio_files/                recordings/  temp/  samples/   (debug audio, git-ignored)
-├── logs/                       tray/, history/, diagnostics/, runtime/ (git-ignored)
-│   ├── tray/                   daily tray logs
-│   ├── history/                command_history.jsonl
-│   ├── diagnostics/            diagnostics.jsonl
-│   └── runtime/                runtime_status.json, control_command.json
-├── pyproject.toml              package definition (src-layout, console script, package-data)
-├── src/voicecontrol/
-│   ├── main.py                 CLI entry: --once / --vad / --wake / --no-send
-│   ├── tray_app.py             headless system-tray daemon
-│   ├── audio/                  device_manager, recorder (StreamRecorder, MicFrameStream)
-│   ├── stt/                    whisper_engine
-│   ├── wake_word/              detector, models.py, models/*.onnx
-│   ├── vad/                    silero_vad (incremental endpointing)
-│   ├── executor/               app_driver (base), codex_driver, window_utils
-│   ├── pipeline/               orchestrator (VoiceOrchestrator, run_wake_loop)
-│   ├── config/                 settings.py, manager.py
-│   ├── control/                file-based commands for tray daemon
-│   ├── events/                 status publisher + runtime status snapshot
-│   ├── history/                command history store + resend
-│   ├── diagnostics/            mic / VAD / wake-word / TTS / Codex-send tests, log reader, diagnostic result store
-│   ├── tts/                    Windows SAPI speaker + status speech subscriber
-│   ├── ui/                     PySide6 control center UI
-│   │   ├── desktop_pet.py      transparent always-on-top desktop pet window
-│   │   ├── desktop_pet_app.py  desktop pet QApplication entry point
-│   │   ├── launcher.py         small UI process launch helpers
-│   │   ├── settings_app.py     QApplication entry point
-│   │   ├── settings_window.py  navigation shell (sidebar + QStackedWidget)
-│   │   ├── config_binding.py   config read/write helpers + Binding type
-│   │   ├── style.py            Apple-style QSS stylesheet
-│   │   ├── widgets.py          reusable form widgets (card, switch, combo, …)
-│   │   ├── assets.py           asset path resolver
-│   │   └── pages/              one QWidget subclass per page
-│   │       ├── base.py         page_layout scaffold + PlaceholderPage
-│   │       ├── status_page.py
-│   │       ├── recording_page.py
-│   │       ├── settings_page.py
-│   │       ├── diagnostics_page.py
-│   │       ├── command_history_page.py
-│   │       ├── logs_page.py
-│   │       └── background_page.py
-│   └── utils/                  feedback (beeps), autostart, hotkeys
+├── config.json
+├── audio_files/                 recordings/, temp/, samples/ (git-ignored)
+├── logs/                        tray/, history/, diagnostics/, runtime/ (git-ignored)
+├── pyproject.toml
 ├── requirements.txt
 ├── README.md
 ├── README_EN.md
 ├── AGENTS.md
-└── AGENTS_CN.md
+├── AGENTS_CN.md
+└── src/voicecontrol/
+    ├── main.py
+    ├── tray_app.py
+    ├── audio/
+    ├── stt/
+    ├── vad/
+    ├── wake_word/
+    ├── executor/
+    │   ├── app_driver.py        AppDriver + LaunchableAppDriver
+    │   ├── router.py            create_driver / get_default_driver
+    │   ├── codex_driver.py
+    │   ├── chatgpt_driver.py
+    │   ├── cursor_driver.py
+    │   └── window_utils.py
+    ├── pipeline/
+    ├── config/
+    ├── control/
+    ├── events/
+    ├── history/
+    ├── diagnostics/
+    ├── tts/
+    ├── ui/
+    └── utils/
 ```
 
-Module boundaries (keep responsibilities separate):
+Module boundaries:
 
-- `audio/` — list devices, record, save/play WAV, validate. No STT/VAD/wake-word logic.
-- `stt/` — load model, transcribe file, normalize result. No mic logic.
-- `executor/` — focus window, send text, simulate input. No STT/recording logic.
-- `pipeline/` — orchestrate the slices; call lower modules, don't reimplement them.
-- `config/` — defaults in `settings.py`; user overrides in `config.json` via `manager.py`.
-- `control/` — file-based IPC commands consumed by the tray daemon.
-- `events/` — in-process status pub/sub plus file-backed runtime status shared by pipeline, tray, TTS, settings UI.
-- `history/` — append-only command history; resend last command from settings UI.
-- `diagnostics/` — mic, VAD, wake-word, TTS, and Codex-send self-tests surfaced in the settings UI.
-- `tts/` — Windows SAPI wrapper and status-phrase subscriber only.
-- `ui/` — PySide6 control center window; no pipeline logic.
-- `utils/` — only code that fits nowhere else.
+- `audio/` lists devices, records, saves/plays WAV, and validates audio. No STT/VAD/wake-word logic.
+- `stt/` loads Whisper and transcribes files. No microphone logic.
+- `executor/` focuses target windows and sends text. No STT/recording logic.
+- `pipeline/` orchestrates lower modules and depends on `AppDriver`, not concrete drivers.
+- `config/` owns defaults and user override merging.
+- `control/` owns file-based tray IPC commands.
+- `events/` owns in-process status pub/sub and runtime status snapshots.
+- `history/` owns append-only command history and resend.
+- `diagnostics/` owns self-tests surfaced in the UI.
+- `tts/` owns Windows SAPI status speech only.
+- `ui/` owns PySide6 control center and desktop pet. No pipeline logic.
+- `utils/` contains only cross-cutting helpers that fit nowhere else.
 
 ---
 
-## 5. Key Defaults (config)
+## 5. Key Config Defaults
 
-Code defaults live in `settings.py`; runtime values come from merged `config.json`.
-Edit via settings UI or hand-edit `config.json`, then **restart tray/listener**.
+Runtime values come from merged `config.json`. After editing config, restart tray/listener.
 
 ```python
 SAMPLE_RATE = 16000
 CHANNELS = 1
 WHISPER_MODEL_SIZE = "small"
-WHISPER_DEVICE = "cuda"          # fallback "cpu"
-WHISPER_COMPUTE_TYPE = "float16" # fallback "int8"
+WHISPER_DEVICE = "cuda"
+WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
-WAKE_WORD_MODEL = "hey_jarvis"   # or bundled "world_activate"
+WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
+DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor
 CODEX_WINDOW_TITLE = "Codex"
-CODEX_LAUNCH_COMMAND = ""        # optional; launch Codex if window missing
-TTS_ENABLED = True               # status phrases via Windows SAPI
-RECORD_HOTKEY = "f9"             # also manual stop during wake-loop recording
+CHATGPT_WINDOW_TITLE = "ChatGPT"
+CURSOR_WINDOW_TITLE = "Cursor"
+TTS_ENABLED = True
+RECORD_HOTKEY = "f9"
 ```
 
-STT module must support at least:
-
-```python
-def transcribe_file(path: str | Path) -> str: ...
-# later: def transcribe_array(audio: np.ndarray, sample_rate: int) -> str: ...
-```
+`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Only Codex, ChatGPT, and Cursor are routable today.
 
 ---
 
 ## 6. Executor Design
 
-Multiple target apps are planned, so use a thin driver abstraction (this is a justified abstraction, not premature).
+Use the driver abstraction; do not hard-code target apps in pipeline/history/diagnostics.
 
 ```python
 class AppDriver:
-    """One driver per target app (Codex, ChatGPT, Cursor, ...)."""
-    def focus(self) -> None: ...
-    def send_prompt(self, text: str) -> None: ...   # prefer clipboard paste + Enter
-```
+    app_name: str
+    window_title: str
+    def focus(self) -> Window: ...
+    def send_prompt(self, text: str, auto_enter: bool | None = None) -> None: ...
 
-`CodexDriver` additionally supports `CODEX_LAUNCH_COMMAND`: if the window is missing, run the configured command and poll until the title appears.
+class LaunchableAppDriver(AppDriver):
+    launch_command: str
+    launch_timeout: float
+    launch_poll_interval: float
+```
 
 Rules:
 
-- Implement Codex Desktop first; add others as drivers later.
-- Prefer **clipboard paste** over char-by-char typing (Chinese / long prompts).
-- Add small delays and clear logs around every desktop action.
-- Watch out for: Alt+Tab instability, IME issues, focus loss, admin-permission boundaries, hotkeys captured by the editor.
-
-Tools when needed: `pyperclip`, `pywin32`, `keyboard`.
+- Route default target selection through `voicecontrol.executor.router.get_default_driver()`.
+- Use `create_driver("codex" | "chatgpt" | "cursor")` for explicit target creation.
+- Prefer clipboard paste over character typing for Chinese and long prompts.
+- Keep desktop actions logged and delayed slightly.
+- Be careful with focus loss, IME state, admin boundaries, and editor hotkeys.
 
 ---
 
 ## 7. Coding Rules
 
 - Simple, readable Python; small functions; explicit over clever.
-- Type hints on public functions/methods where practical.
-- `pathlib.Path` for paths. No hardcoded paths outside `config/`.
-- `logging` in reusable modules; `print` only in CLI entry points and `__main__` debug blocks.
-- Naming: `snake_case` files/funcs/vars/modules, `PascalCase` classes, `UPPER_CASE` constants.
+- Type hints on public functions and methods where practical.
+- Use `pathlib.Path` for paths.
+- Reusable modules use `logging`; `print` is fine only in CLI/debug entry points.
+- Naming: `snake_case` for files/functions/vars/modules, `PascalCase` for classes, `UPPER_CASE` for constants.
 - Avoid global mutable state unless clearly required.
+- Preserve user changes in a dirty worktree; never revert unrelated edits.
 
 ---
 
 ## 8. Error Handling
 
-Handle Windows failures explicitly — never silently swallow:
+Handle Windows failures explicitly. Never silently swallow:
 
 ```text
-mic unavailable · invalid device index · audio file missing
-model load failure · empty transcription · window not found
-permission denied · hotkey conflict · TTS/SAPI unavailable
+mic unavailable, invalid device index, missing audio file,
+model load failure, empty transcription, window not found,
+launch failure, permission denied, hotkey conflict, TTS/SAPI unavailable
 ```
 
-Reusable modules: raise clear exceptions or log. CLI entry points: printing the error is fine.
-
-Audio rules: always allow manual testing; save debug WAVs early; handle missing mics gracefully; never assume the default device is correct; provide a device-listing function.
+Reusable modules should raise clear exceptions or log. CLI entry points may print user-facing errors.
 
 ---
 
 ## 9. Dependencies
 
-All runtime deps are in `requirements.txt` and mirrored in `pyproject.toml`.
-Add intentionally: explain why, prefer stable/common packages, no duplicates.
+Runtime dependencies live in `requirements.txt` and are mirrored in `pyproject.toml`. Add dependencies intentionally, explain why, prefer stable/common packages, and avoid duplicates.
 
-Bundled package data (via `pyproject.toml`): `ui/assets/*`, `wake_word/models/*`.
+Bundled package data:
+
+```text
+ui/assets/*
+wake_word/models/*
+```
 
 ---
 
-## 10. Out of Scope (for now)
+## 10. Out of Scope For Now
 
 ```text
-Full conversational TTS (reading Codex replies aloud)
-Obsidian · Computer Use · LLM router · multi-agent
+Full conversational TTS
+LLM intent router
+CLI-agent driver
 Packaged installer
-true Windows Service (session 0 can't drive the desktop — use the tray app)
-ChatGPT/Cursor drivers (planned as new AppDriver subclasses)
-transcribe_array (in-memory STT without temp WAV)
+Automatic first-run app discovery
+True Windows Service
+Trae driver/router support
+transcribe_array
 ```
 
 ---
@@ -283,10 +263,10 @@ transcribe_array (in-memory STT without temp WAV)
 ## 11. Agent Behavior
 
 1. Read `README.md` and this file first; inspect the file tree before creating files.
-2. Make the smallest useful change; keep code runnable at every step.
+2. Make the smallest useful change and keep the project runnable.
 3. One working vertical slice beats many half-finished modules.
-4. Preserve naming conventions; don't rewrite unrelated files.
-5. State the exact PowerShell commands the user should run.
+4. Preserve naming conventions; do not rewrite unrelated files.
+5. State exact PowerShell commands the user should run.
 6. For uncertain Windows audio behavior, write a diagnostic script first.
 
-Philosophy: **make it run → make it observable → make it stable → make it fast → make it intelligent.**
+Philosophy: make it run -> make it observable -> make it stable -> make it fast -> make it intelligent.
