@@ -80,6 +80,12 @@ CURSOR_WINDOW_TITLE: str = "Cursor"
 CURSOR_LAUNCH_COMMAND: str = "explorer.exe shell:AppsFolder\\Anysphere.Cursor"
 CURSOR_LAUNCH_TIMEOUT: float = 15.0
 CURSOR_LAUNCH_POLL_INTERVAL: float = 0.5
+TRAE_WINDOW_TITLE: str = "Trae"
+TRAE_LAUNCH_COMMAND: str = ""
+TRAE_LAUNCH_TIMEOUT: float = 15.0
+TRAE_LAUNCH_POLL_INTERVAL: float = 0.5
+TRAE_COMPOSER_CLICK_REL_X: float = 0.9
+TRAE_COMPOSER_CLICK_REL_Y: float = 0.95
 # Press Enter after pasting to submit the prompt.
 SEND_PROMPT_AUTO_ENTER: bool = True
 # Delays (seconds) around desktop actions — keep small but non-zero (AGENTS §6).
@@ -185,6 +191,12 @@ CURSOR_WINDOW_TITLE = _EXECUTOR_CONFIG["cursor_window_title"]
 CURSOR_LAUNCH_COMMAND = _EXECUTOR_CONFIG["cursor_launch_command"]
 CURSOR_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["cursor_launch_timeout"]
 CURSOR_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["cursor_launch_poll_interval"]
+TRAE_WINDOW_TITLE = _EXECUTOR_CONFIG["trae_window_title"]
+TRAE_LAUNCH_COMMAND = _EXECUTOR_CONFIG["trae_launch_command"]
+TRAE_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["trae_launch_timeout"]
+TRAE_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["trae_launch_poll_interval"]
+TRAE_COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["trae_composer_click_rel_x"]
+TRAE_COMPOSER_CLICK_REL_Y = _EXECUTOR_CONFIG["trae_composer_click_rel_y"]
 SEND_PROMPT_AUTO_ENTER = _EXECUTOR_CONFIG["send_prompt_auto_enter"]
 CLICK_COMPOSER_BEFORE_PASTE = _EXECUTOR_CONFIG["click_composer_before_paste"]
 COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["composer_click_rel_x"]

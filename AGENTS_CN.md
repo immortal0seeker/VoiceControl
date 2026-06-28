@@ -8,7 +8,7 @@ VoiceControl 是面向 Windows 11 的本地语音驱动桌面自动化助手。M
 
 ```text
 说话 -> 唤醒词 -> 录音 -> 语音转文字 -> 路由命令
-     -> 发送到 Codex / ChatGPT / Cursor -> 执行任务 -> 可选 TTS
+     -> 发送到 Codex / ChatGPT / Cursor / Trae -> 执行任务 -> 可选 TTS
 ```
 
 这是一个由语音驱动的本地桌面自动化系统，不是通用聊天机器人。
@@ -44,13 +44,13 @@ pip install -e .
 | 默认 STT 模型 | `small`；升级路径：`medium` -> `large-v3` |
 | 计算 | GPU 优先：`cuda` / `float16`；CPU 兜底：`int8` |
 | 用户配置 | 根目录 `config.json` 覆盖代码默认值；`config/manager.py` 合并；`settings.py` 导出 |
-| Executor 目标 | Codex Desktop、ChatGPT Desktop、Cursor；Trae 目前只有启动命令配置，还没有 driver/router |
+| Executor 目标 | Codex Desktop、ChatGPT Desktop、Cursor、Trae |
 | Executor 设计 | 可插拔 `AppDriver`；复用 `LaunchableAppDriver`；由 `executor/router.py` 选择目标 |
 | VAD | faster-whisper 附带的 Silero VAD ONNX，通过 onnxruntime 使用 |
 | 唤醒词 | openWakeWord ONNX；内置 `hey_jarvis` 或自定义 `world_activate.onnx` |
 | TTS | Windows SAPI via `pywin32`；只播报短状态提示，不朗读完整回复 |
 | 后台模式 | `pythonw` 托盘程序；HKCU Run 开机自启；不是 Windows Service |
-| 进程间控制 | `logs/runtime/control_command.json` 文件命令，由托盘守护进程消费 |
+| 进程间控制 | `logs/runtime/control_command.json` 文件命令，`logs/runtime/control_response.json` 写回确认 |
 
 ---
 
@@ -61,7 +61,7 @@ pip install -e .
 调试 CLI 热键触发       F9 开始/停止，Esc 退出
 VAD 自动停录            热键循环加 --vad
 唤醒词 + 托盘           --wake 或 pythonw -m voicecontrol.tray_app
-目标应用路由            executor.default_target = codex / chatgpt / cursor
+目标应用路由            executor.default_target = codex / chatgpt / cursor / trae
 Codex driver            聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
 ChatGPT driver          聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
 Cursor driver           聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
@@ -125,6 +125,7 @@ VoiceControl/
     │   ├── codex_driver.py
     │   ├── chatgpt_driver.py
     │   ├── cursor_driver.py
+    │   ├── trae_driver.py
     │   └── window_utils.py
     ├── pipeline/
     ├── config/
@@ -167,7 +168,7 @@ WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
-DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor
+DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor | trae
 CODEX_WINDOW_TITLE = "Codex"
 CHATGPT_WINDOW_TITLE = "ChatGPT"
 CURSOR_WINDOW_TITLE = "Cursor"
@@ -175,7 +176,7 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。现在只有 Codex、ChatGPT、Cursor 可作为路由目标。
+`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。四者现在都可作为路由目标。
 
 ---
 
@@ -199,7 +200,7 @@ class LaunchableAppDriver(AppDriver):
 规则：
 
 - 默认目标通过 `voicecontrol.executor.router.get_default_driver()` 获取。
-- 显式目标通过 `create_driver("codex" | "chatgpt" | "cursor")` 创建。
+- 显式目标通过 `create_driver("codex" | "chatgpt" | "cursor" | "trae")` 创建。
 - 优先用剪贴板粘贴，而不是逐字输入。
 - 桌面操作前后保留短延迟和清晰日志。
 - 注意焦点丢失、输入法、管理员权限边界、编辑器热键截获。
@@ -254,7 +255,6 @@ CLI agent driver
 打包安装器
 首次运行自动发现应用
 真正 Windows Service
-Trae driver/router
 transcribe_array
 ```
 

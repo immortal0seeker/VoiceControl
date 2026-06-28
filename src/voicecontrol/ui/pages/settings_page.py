@@ -6,9 +6,10 @@ feedback, desktop pet), the save/reload footer, and a live TTS test button.
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from voicecontrol.config.manager import ConfigError, load_config, save_config
+from voicecontrol.control.commands import RELOAD_EXECUTOR, read_control_response, write_control_command
 from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.config_binding import Binding, get_nested, optional_float_text, register, set_nested
 from voicecontrol.ui.widgets import add_row, card, combo, double_spin, int_spin, line_edit, switch
@@ -79,14 +81,30 @@ class SettingsPage(QWidget):
     def reload(self, config: dict[str, Any]) -> None:
         """Rebuild the page with a freshly loaded config dict."""
         self._config = config
-        # Remove and re-add all child widgets by rebuilding the layout.
         old_layout = self.layout()
         if old_layout is not None:
             while old_layout.count():
                 item = old_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(None)
+                    widget.deleteLater()
+                elif item.layout() is not None:
+                    self._clear_layout(item.layout())
+            self.setLayout(None)
+            del old_layout
         self._build_ui()
+
+    def _clear_layout(self, layout) -> None:
+        """Recursively delete all widgets and sub-layouts from a layout."""
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+            elif item.layout() is not None:
+                self._clear_layout(item.layout())
 
     # ------------------------------------------------------------------
     # Card builders
@@ -190,56 +208,199 @@ class SettingsPage(QWidget):
         frame, layout = card("Executor")
         target = combo(
             get_nested(self._config, ("executor", "default_target")),
-            ["codex", "chatgpt", "cursor"],
+            ["codex", "chatgpt", "cursor", "trae"],
         )
         target.setObjectName("executorTargetCombo")
-        codex_title = line_edit(
-            get_nested(self._config, ("executor", "codex_window_title")), "Codex"
+
+        target_app_fields = {
+            "codex": (
+                "codex_window_title",
+                "codex_launch_command",
+                "Codex",
+                "composer_click_rel_x",
+                "composer_click_rel_y",
+                "composerClickRelX",
+                "composerClickRelY",
+            ),
+            "chatgpt": (
+                "chatgpt_window_title",
+                "chatgpt_launch_command",
+                "ChatGPT",
+                "composer_click_rel_x",
+                "composer_click_rel_y",
+                "composerClickRelX",
+                "composerClickRelY",
+            ),
+            "cursor": (
+                "cursor_window_title",
+                "cursor_launch_command",
+                "Cursor",
+                "composer_click_rel_x",
+                "composer_click_rel_y",
+                "composerClickRelX",
+                "composerClickRelY",
+            ),
+            "trae": (
+                "trae_window_title",
+                "trae_launch_command",
+                "Trae",
+                "trae_composer_click_rel_x",
+                "trae_composer_click_rel_y",
+                "traeComposerClickRelX",
+                "traeComposerClickRelY",
+            ),
+        }
+
+        def get_current_target_fields():
+            current_target = target.currentText()
+            return target_app_fields.get(current_target, target_app_fields["codex"])
+
+        (
+            window_title_key,
+            launch_command_key,
+            app_display_name,
+            click_x_key,
+            click_y_key,
+            click_x_object_name,
+            click_y_object_name,
+        ) = get_current_target_fields()
+
+        window_title_label = QLabel("窗口标题")
+        window_title_label.setStyleSheet("background: transparent;")
+        window_title_edit = line_edit(
+            get_nested(self._config, ("executor", window_title_key)),
+            app_display_name,
         )
-        codex_launch = line_edit(
-            get_nested(self._config, ("executor", "codex_launch_command")),
-            r"C:\Path\To\Codex.exe",
+        window_title_description = QLabel(f"用于查找 {app_display_name} 窗口的标题子串。")
+        window_title_description.setObjectName("fieldDescription")
+        window_title_description.setStyleSheet("background: transparent;")
+
+        launch_command_label = QLabel("启动命令")
+        launch_command_label.setStyleSheet("background: transparent;")
+        launch_command_edit = line_edit(
+            get_nested(self._config, ("executor", launch_command_key)),
+            r"C:\Path\To\App.exe",
         )
-        codex_launch.setObjectName("codexLaunchCommand")
+        launch_command_description = QLabel("找不到窗口时尝试启动；留空则只报错。")
+        launch_command_description.setObjectName("fieldDescription")
+        launch_command_description.setStyleSheet("background: transparent;")
+
         auto_enter = switch(get_nested(self._config, ("executor", "send_prompt_auto_enter")))
         click_before_paste = switch(
             get_nested(self._config, ("executor", "click_composer_before_paste"))
         )
         click_x = double_spin(
-            get_nested(self._config, ("executor", "composer_click_rel_x")), 0.0, 1.0, 0.05
+            get_nested(self._config, ("executor", click_x_key)), 0.0, 1.0, 0.05
         )
+        click_x.setObjectName(click_x_object_name)
         click_y = double_spin(
-            get_nested(self._config, ("executor", "composer_click_rel_y")), 0.0, 1.0, 0.05
+            get_nested(self._config, ("executor", click_y_key)), 0.0, 1.0, 0.05
         )
+        click_y.setObjectName(click_y_object_name)
 
-        add_row(layout, "窗口标题", codex_title, "用于查找 Codex Desktop 窗口的标题子串。")
-        add_row(layout, "启动命令", codex_launch, "找不到窗口时尝试启动；留空则只报错。")
+        title_row_layout = QHBoxLayout()
+        title_row_layout.addWidget(window_title_label)
+        title_row_layout.addWidget(window_title_edit)
+        layout.addLayout(title_row_layout)
+        layout.addWidget(window_title_description)
+
+        launch_row_layout = QHBoxLayout()
+        launch_row_layout.addWidget(launch_command_label)
+        launch_row_layout.addWidget(launch_command_edit)
+        layout.addLayout(launch_row_layout)
+        layout.addWidget(launch_command_description)
+
         add_row(layout, "粘贴后自动回车", auto_enter)
         add_row(layout, "粘贴前点击输入框", click_before_paste)
         add_row(layout, "输入框 X 位置", click_x, "窗口内相对坐标，0 左侧，1 右侧。")
         add_row(layout, "输入框 Y 位置", click_y, "窗口内相对坐标，0 顶部，1 底部。")
-
         add_row(layout, "目标应用", target, "语音命令默认发送到哪个桌面应用。")
 
+        def update_target_fields():
+            (
+                window_title_key,
+                launch_command_key,
+                app_display_name,
+                click_x_key,
+                click_y_key,
+                click_x_object_name,
+                click_y_object_name,
+            ) = get_current_target_fields()
+            window_title_edit.setText(
+                get_nested(self._config, ("executor", window_title_key)) or app_display_name
+            )
+            launch_command_edit.setText(
+                get_nested(self._config, ("executor", launch_command_key)) or ""
+            )
+            click_x.setValue(get_nested(self._config, ("executor", click_x_key)))
+            click_x.setObjectName(click_x_object_name)
+            click_y.setValue(get_nested(self._config, ("executor", click_y_key)))
+            click_y.setObjectName(click_y_object_name)
+            window_title_description.setText(f"用于查找 {app_display_name} 窗口的标题子串。")
+
+        target.currentIndexChanged.connect(update_target_fields)
+
+        def selected_value(
+            selected_target: str,
+            config_key: str,
+            reader,
+        ):
+            if target.currentText() == selected_target:
+                return reader()
+            return get_nested(self._config, ("executor", config_key))
+
         register(self._bindings, ("executor", "default_target"), target.currentText)
-        register(
-            self._bindings,
-            ("executor", "codex_window_title"),
-            lambda: codex_title.text().strip(),
-        )
-        register(
-            self._bindings,
-            ("executor", "codex_launch_command"),
-            lambda: codex_launch.text().strip(),
-        )
+
+        for app_key, (title_key, launch_key, *_rest) in target_app_fields.items():
+            register(
+                self._bindings,
+                ("executor", title_key),
+                lambda app_key=app_key, title_key=title_key: selected_value(
+                    app_key,
+                    title_key,
+                    lambda: window_title_edit.text().strip(),
+                ),
+            )
+            register(
+                self._bindings,
+                ("executor", launch_key),
+                lambda app_key=app_key, launch_key=launch_key: selected_value(
+                    app_key,
+                    launch_key,
+                    lambda: launch_command_edit.text().strip(),
+                ),
+            )
+
         register(self._bindings, ("executor", "send_prompt_auto_enter"), auto_enter.isChecked)
         register(
             self._bindings,
             ("executor", "click_composer_before_paste"),
             click_before_paste.isChecked,
         )
-        register(self._bindings, ("executor", "composer_click_rel_x"), click_x.value)
-        register(self._bindings, ("executor", "composer_click_rel_y"), click_y.value)
+        register(
+            self._bindings,
+            ("executor", "composer_click_rel_x"),
+            lambda: click_x.value()
+            if target.currentText() != "trae"
+            else get_nested(self._config, ("executor", "composer_click_rel_x")),
+        )
+        register(
+            self._bindings,
+            ("executor", "composer_click_rel_y"),
+            lambda: click_y.value()
+            if target.currentText() != "trae"
+            else get_nested(self._config, ("executor", "composer_click_rel_y")),
+        )
+        register(
+            self._bindings,
+            ("executor", "trae_composer_click_rel_x"),
+            lambda: selected_value("trae", "trae_composer_click_rel_x", click_x.value),
+        )
+        register(
+            self._bindings,
+            ("executor", "trae_composer_click_rel_y"),
+            lambda: selected_value("trae", "trae_composer_click_rel_y", click_y.value),
+        )
         content_layout.addWidget(frame)
 
     def _add_tts_card(self, content_layout: QVBoxLayout) -> None:
@@ -338,13 +499,17 @@ class SettingsPage(QWidget):
 
         reset_button = QPushButton("重新载入")
         reset_button.setObjectName("secondary")
+        apply_button = QPushButton("应用更改")
+        apply_button.setObjectName("applyExecutorChangeButton")
         save_button = QPushButton("保存设置")
         save_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         footer.addWidget(reset_button)
+        footer.addWidget(apply_button)
         footer.addWidget(save_button)
 
         save_button.clicked.connect(self._save_current)
         reset_button.clicked.connect(self._reload_page)
+        apply_button.clicked.connect(self._apply_executor_change)
         return footer
 
     def _test_tts(self, enabled: bool, rate: int, volume: int, voice: str | None) -> None:
@@ -369,6 +534,60 @@ class SettingsPage(QWidget):
             QMessageBox.critical(self, "保存失败", str(exc))
             return
         QMessageBox.information(self, "已保存", "配置已写入 config.json。重启监听进程后生效。")
+
+    def _apply_executor_change(self) -> None:
+        """Save config and notify tray daemon to reload executor driver."""
+        next_config = load_config()
+        try:
+            for path, reader in self._bindings:
+                set_nested(next_config, path, reader())
+            save_config(next_config)
+        except ValueError as exc:
+            QMessageBox.warning(self, "保存失败", f"请检查输入格式：{exc}")
+            return
+        except ConfigError as exc:
+            QMessageBox.critical(self, "保存失败", str(exc))
+            return
+
+        request_started_at = time.time()
+        try:
+            write_control_command(RELOAD_EXECUTOR)
+        except OSError:
+            QMessageBox.warning(self, "应用失败", "无法写入控制命令文件。Tray daemon 可能未运行。")
+            return
+
+        response = self._wait_for_reload_response(since=request_started_at)
+        if response is None:
+            QMessageBox.warning(
+                self,
+                "已保存，未确认应用",
+                "配置已保存，但未收到 Tray daemon 的重载确认。请确认托盘监听进程正在运行。",
+            )
+            return
+        message = str(response.get("message", ""))
+        if response.get("status") != "ok":
+            QMessageBox.warning(self, "应用失败", message or "Tray daemon 未能重载目标应用。")
+            return
+        QMessageBox.information(self, "已应用", message or "目标应用已重载。")
+
+    def _wait_for_reload_response(
+        self,
+        since: float,
+        timeout_seconds: float = 2.0,
+    ) -> dict[str, Any] | None:
+        """Wait briefly for the tray daemon to acknowledge executor reload."""
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            response = read_control_response(max_age_seconds=timeout_seconds + 1.0)
+            if (
+                response is not None
+                and response.get("command") == RELOAD_EXECUTOR
+                and float(response.get("created_at", 0.0)) >= since
+            ):
+                return response
+            QCoreApplication.processEvents()
+            time.sleep(0.05)
+        return None
 
     def _reload_page(self) -> None:
         try:

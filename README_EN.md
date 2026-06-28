@@ -11,7 +11,7 @@ VoiceControl is a local voice-driven desktop assistant for Windows 11. After a w
 ```text
 hey jarvis / world_activate -> beep or TTS "I'm here"
 -> speak command -> VAD auto-stop -> Whisper transcription
--> send to Codex / ChatGPT / Cursor
+-> send to Codex / ChatGPT / Cursor / Trae
 ```
 
 It is a local desktop automation system, not a general chatbot.
@@ -22,7 +22,7 @@ It is a local desktop automation system, not a general chatbot.
 - Python 3.11+, using only the project `.venv`
 - Microphone
 - NVIDIA GPU optional; CPU fallback is supported
-- At least one target desktop app installed as needed: Codex Desktop, ChatGPT Desktop, or Cursor
+- At least one target desktop app installed as needed: Codex Desktop, ChatGPT Desktop, Cursor, or Trae
 
 ## Installation
 
@@ -50,7 +50,7 @@ The control center edits `config.json`. Restart the tray/listener process after 
 The Executor card can choose the default target app:
 
 ```text
-codex | chatgpt | cursor
+codex | chatgpt | cursor | trae
 ```
 
 ### Daily Use: Tray Daemon
@@ -113,6 +113,7 @@ Supported values:
 codex
 chatgpt
 cursor
+trae
 ```
 
 The current config includes AppsFolder launch commands:
@@ -126,8 +127,8 @@ The current config includes AppsFolder launch commands:
 
 Notes:
 
-- Codex, ChatGPT, and Cursor have driver and router support.
-- Trae has a launch command configured, but no driver/router support yet.
+- Codex, ChatGPT, Cursor, and Trae have driver and router support.
+- Trae uses its own configurable composer click coordinates.
 - If a target window is missing and its launch command is configured, the driver tries to start the app and waits for a matching window.
 
 ## Diagnostics
@@ -151,6 +152,7 @@ The control center also provides microphone, VAD, wake-word, TTS, default-target
 | `executor.codex_window_title` | `Codex` | Codex window-title match |
 | `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT window-title match |
 | `executor.cursor_window_title` | `Cursor` | Cursor window-title match |
+| `executor.trae_window_title` | `Trae` | Trae window-title match |
 | `stt.whisper_model_size` | `small` | Upgrade path: `medium` / `large-v3` |
 | `tts.enabled` | `true` | Windows SAPI short status phrases |
 | `hotkeys.record_hotkey` | `f9` | Recording hotkey |
@@ -173,6 +175,7 @@ src/voicecontrol/
 │   ├── codex_driver.py
 │   ├── chatgpt_driver.py
 │   ├── cursor_driver.py
+│   ├── trae_driver.py
 │   └── window_utils.py
 ├── pipeline/
 ├── control/
@@ -196,7 +199,7 @@ Shipped:
 - Microphone capture and faster-whisper transcription
 - F9 hotkey recording and VAD auto-stop
 - openWakeWord wake-word loop and tray daemon
-- Codex / ChatGPT / Cursor desktop drivers
+- Codex / ChatGPT / Cursor / Trae desktop drivers
 - Default target-app routing
 - AppsFolder launch-command config
 - PySide6 control center
@@ -214,7 +217,6 @@ Planned:
 - Stability and diagnostics improvements
 - Smarter voice routing
 - CLI agent driver
-- Trae driver/router
 
 ## Developer Docs
 

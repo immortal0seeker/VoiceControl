@@ -5,7 +5,9 @@ import unittest
 from voicecontrol.executor.chatgpt_driver import ChatGPTDriver
 from voicecontrol.executor.codex_driver import CodexDriver
 from voicecontrol.executor.cursor_driver import CursorDriver
+from voicecontrol.executor import router
 from voicecontrol.executor.router import create_driver
+from voicecontrol.executor.trae_driver import TraeDriver
 
 
 class ExecutorRouterTests(unittest.TestCase):
@@ -13,6 +15,30 @@ class ExecutorRouterTests(unittest.TestCase):
         self.assertIsInstance(create_driver("codex"), CodexDriver)
         self.assertIsInstance(create_driver("chatgpt"), ChatGPTDriver)
         self.assertIsInstance(create_driver("cursor"), CursorDriver)
+        self.assertIsInstance(create_driver("trae"), TraeDriver)
+
+    def test_create_driver_from_config_uses_fresh_values(self) -> None:
+        config = {
+            "executor": {
+                "default_target": "trae",
+                "trae_window_title": "Fresh Trae",
+                "trae_launch_command": r"C:\Apps\Trae\Trae.exe",
+                "trae_launch_timeout": 7.0,
+                "trae_launch_poll_interval": 0.25,
+                "trae_composer_click_rel_x": 0.77,
+                "trae_composer_click_rel_y": 0.88,
+            }
+        }
+
+        driver = router.create_driver_from_config(config)
+
+        self.assertIsInstance(driver, TraeDriver)
+        self.assertEqual(driver.window_title, "Fresh Trae")
+        self.assertEqual(driver.launch_command, r"C:\Apps\Trae\Trae.exe")
+        self.assertEqual(driver.launch_timeout, 7.0)
+        self.assertEqual(driver.launch_poll_interval, 0.25)
+        self.assertEqual(driver.composer_click_rel_x, 0.77)
+        self.assertEqual(driver.composer_click_rel_y, 0.88)
 
     def test_create_driver_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError) as context:

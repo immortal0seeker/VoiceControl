@@ -31,6 +31,7 @@ from voicecontrol.events.status import StatusPublisher, StatusType
 from voicecontrol.events.status_snapshot import RuntimeStatusSnapshot, write_runtime_status
 from voicecontrol.history.resend import ResendResult
 from voicecontrol.history.store import CommandHistoryRecord, append_command_history
+from voicecontrol.ui.config_binding import set_nested
 from voicecontrol.ui.pages.logs_page import LogsPage
 from voicecontrol.ui.settings_window import SettingsWindow
 from voicecontrol.ui.style import apple_style_sheet
@@ -112,7 +113,8 @@ class SettingsWindowNavigationTests(unittest.TestCase):
     def test_settings_page_exposes_codex_launch_command(self) -> None:
         window = SettingsWindow(load_config())
 
-        self.assertIsNotNone(window.findChild(QLineEdit, "codexLaunchCommand"))
+        target = window.findChild(QComboBox, "executorTargetCombo")
+        self.assertIsNotNone(target)
 
     def test_settings_page_exposes_executor_target_selector(self) -> None:
         window = SettingsWindow(load_config())
@@ -120,7 +122,57 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
         self.assertIsNotNone(target)
         self.assertEqual(target.currentText(), "codex")
-        self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor"])
+        self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor", "trae"])
+
+    def test_settings_page_binds_trae_composer_coordinates(self) -> None:
+        from PySide6.QtWidgets import QDoubleSpinBox
+
+        config = load_config()
+        config["executor"]["default_target"] = "trae"
+        config["executor"]["trae_composer_click_rel_x"] = 0.33
+        config["executor"]["trae_composer_click_rel_y"] = 0.44
+        window = SettingsWindow(config)
+
+        click_x = window.findChild(QDoubleSpinBox, "traeComposerClickRelX")
+        click_y = window.findChild(QDoubleSpinBox, "traeComposerClickRelY")
+
+        self.assertIsNotNone(click_x)
+        self.assertIsNotNone(click_y)
+        self.assertAlmostEqual(click_x.value(), 0.33)
+        self.assertAlmostEqual(click_y.value(), 0.44)
+
+        click_x.setValue(0.66)
+        click_y.setValue(0.77)
+        next_config = load_config()
+        settings_page = window.findChild(QWidget, "settingsPage")
+        self.assertIsNotNone(settings_page)
+        for path, reader in settings_page._bindings:
+            set_nested(next_config, path, reader())
+
+        self.assertAlmostEqual(next_config["executor"]["trae_composer_click_rel_x"], 0.66)
+        self.assertAlmostEqual(next_config["executor"]["trae_composer_click_rel_y"], 0.77)
+
+    def test_apply_executor_change_waits_for_reload_ack(self) -> None:
+        window = SettingsWindow(load_config())
+        apply_button = window.findChild(QPushButton, "applyExecutorChangeButton")
+
+        self.assertIsNotNone(apply_button)
+        with (
+            patch("voicecontrol.ui.pages.settings_page.write_control_command") as write_command,
+            patch("voicecontrol.ui.pages.settings_page.read_control_response") as read_response,
+            patch("voicecontrol.ui.pages.settings_page.QMessageBox.information") as information,
+        ):
+            read_response.return_value = {
+                "command": "reload_executor",
+                "status": "ok",
+                "message": "Executor target switched to: Trae",
+                "created_at": 9999999999.0,
+            }
+            apply_button.click()
+
+        write_command.assert_called_once_with("reload_executor")
+        information.assert_called_once()
+        self.assertIn("Executor target switched to: Trae", information.call_args.args[2])
 
     def test_settings_page_exposes_tts_controls(self) -> None:
         window = SettingsWindow(load_config())

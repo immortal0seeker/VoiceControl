@@ -21,6 +21,27 @@ class PipelineStatusEventTests(unittest.TestCase):
 
         self.assertEqual(orchestrator.driver, driver)
 
+    def test_reload_driver_uses_fresh_config_factory(self) -> None:
+        engine = Mock()
+        old_driver = Mock()
+        new_driver = Mock()
+        new_driver.app_name = "Trae"
+        config = {"executor": {"default_target": "trae"}}
+        orchestrator = VoiceOrchestrator(engine=engine, driver=old_driver)
+
+        with (
+            patch("voicecontrol.config.manager.load_config", return_value=config) as load_config,
+            patch(
+                "voicecontrol.executor.router.create_driver_from_config",
+                return_value=new_driver,
+            ) as create_driver,
+        ):
+            orchestrator.reload_driver()
+
+        load_config.assert_called_once_with()
+        create_driver.assert_called_once_with(config)
+        self.assertEqual(orchestrator.driver, new_driver)
+
     def test_process_audio_publishes_transcribing_sending_done(self) -> None:
         publisher = StatusPublisher()
         events: list[StatusType] = []

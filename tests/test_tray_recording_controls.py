@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from voicecontrol import tray_app
-from voicecontrol.control.commands import PAUSE_LISTENING, RESUME_LISTENING
+from voicecontrol.control.commands import PAUSE_LISTENING, RELOAD_EXECUTOR, RESUME_LISTENING
 from voicecontrol.events.status import StatusPublisher, StatusType
 from voicecontrol.events.status_snapshot import RuntimeStatusSnapshotStore, read_runtime_status
 
@@ -20,6 +20,7 @@ class TrayRecordingControlTests(unittest.TestCase):
         app._is_recording = False
         app._icon = Mock()
         app._status_unsubscribe = None
+        app._orchestrator = None
         return app
 
     def test_recording_menu_label_changes_with_recording_state(self) -> None:
@@ -100,6 +101,29 @@ class TrayRecordingControlTests(unittest.TestCase):
         assert resumed_snapshot is not None
         self.assertEqual(paused_snapshot.current, "paused")
         self.assertEqual(resumed_snapshot.current, "listening")
+
+    def test_reload_executor_command_writes_success_response(self) -> None:
+        app = self._app()
+        app._orchestrator = Mock()
+        app._orchestrator.driver.app_name = "Trae"
+
+        with patch("voicecontrol.tray_app.write_control_response") as write_response:
+            app._handle_control_command(RELOAD_EXECUTOR)
+
+        app._orchestrator.reload_driver.assert_called_once_with()
+        write_response.assert_called_once_with(RELOAD_EXECUTOR, "ok", "Executor target switched to: Trae")
+
+    def test_reload_executor_command_reports_missing_orchestrator(self) -> None:
+        app = self._app()
+
+        with patch("voicecontrol.tray_app.write_control_response") as write_response:
+            app._handle_control_command(RELOAD_EXECUTOR)
+
+        write_response.assert_called_once_with(
+            RELOAD_EXECUTOR,
+            "error",
+            "Wake loop is not ready; executor was not reloaded.",
+        )
 
     def test_control_worker_dispatches_pause_command(self) -> None:
         app = self._app()

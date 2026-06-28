@@ -6,7 +6,7 @@ End-to-end goal:
 
 ```text
 speak -> wake word -> record -> speech-to-text -> route command
-      -> send to Codex / ChatGPT / Cursor -> execute task -> optional TTS
+      -> send to Codex / ChatGPT / Cursor / Trae -> execute task -> optional TTS
 ```
 
 This is a local desktop automation system driven by voice, not a generic chatbot.
@@ -42,13 +42,13 @@ The editable install registers the `voicecontrol` package so `python -m voicecon
 | Default STT model | `small`; upgrade path: `medium` -> `large-v3` |
 | Compute | GPU first: `device="cuda"`, `compute_type="float16"`; CPU fallback: `int8` |
 | User config | Root `config.json` merged over defaults via `config/manager.py`; `settings.py` exports merged values |
-| Executor targets | Codex Desktop, ChatGPT Desktop, Cursor; Trae launch config is present but no driver/router support yet |
+| Executor targets | Codex Desktop, ChatGPT Desktop, Cursor, Trae |
 | Executor design | Pluggable `AppDriver`; reusable `LaunchableAppDriver`; `executor/router.py` selects the configured target |
 | VAD engine | Silero VAD ONNX bundled through faster-whisper / onnxruntime, no torch |
 | Wake word engine | openWakeWord ONNX; built-in `hey_jarvis` or bundled custom `world_activate.onnx` |
 | TTS | Windows SAPI via `pywin32`; short status phrases only, not full reply read-back |
 | Background mode | Tray app via `pythonw`; launch-at-logon via HKCU Run key; not a Windows Service |
-| Inter-process control | File commands in `logs/runtime/control_command.json`, consumed by the tray daemon |
+| Inter-process control | File commands in `logs/runtime/control_command.json`, with acknowledgements in `logs/runtime/control_response.json` |
 
 ---
 
@@ -59,7 +59,7 @@ Debug CLI recording         python -m voicecontrol.main --once
 Debug CLI hotkey trigger    F9 start/stop, Esc quit
 VAD auto-stop               --vad flag on hotkey loop
 Wake word + tray daemon     --wake or pythonw -m voicecontrol.tray_app
-Executor routing            codex / chatgpt / cursor selected by executor.default_target
+Executor routing            codex / chatgpt / cursor / trae selected by executor.default_target
 Codex driver                focus -> click composer -> paste -> Enter; optional auto-launch
 ChatGPT driver              focus -> click composer -> paste -> Enter; optional auto-launch
 Cursor driver               focus -> click composer -> paste -> Enter; optional auto-launch
@@ -125,6 +125,7 @@ VoiceControl/
     │   ├── codex_driver.py
     │   ├── chatgpt_driver.py
     │   ├── cursor_driver.py
+    │   ├── trae_driver.py
     │   └── window_utils.py
     ├── pipeline/
     ├── config/
@@ -167,7 +168,7 @@ WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
-DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor
+DEFAULT_EXECUTOR_TARGET = "codex"  # codex | chatgpt | cursor | trae
 CODEX_WINDOW_TITLE = "Codex"
 CHATGPT_WINDOW_TITLE = "ChatGPT"
 CURSOR_WINDOW_TITLE = "Cursor"
@@ -175,7 +176,7 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Only Codex, ChatGPT, and Cursor are routable today.
+`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. All four are routable today.
 
 ---
 
@@ -199,7 +200,7 @@ class LaunchableAppDriver(AppDriver):
 Rules:
 
 - Route default target selection through `voicecontrol.executor.router.get_default_driver()`.
-- Use `create_driver("codex" | "chatgpt" | "cursor")` for explicit target creation.
+- Use `create_driver("codex" | "chatgpt" | "cursor" | "trae")` for explicit target creation.
 - Prefer clipboard paste over character typing for Chinese and long prompts.
 - Keep desktop actions logged and delayed slightly.
 - Be careful with focus loss, IME state, admin boundaries, and editor hotkeys.
@@ -254,7 +255,6 @@ CLI-agent driver
 Packaged installer
 Automatic first-run app discovery
 True Windows Service
-Trae driver/router support
 transcribe_array
 ```
 

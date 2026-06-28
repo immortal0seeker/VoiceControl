@@ -73,6 +73,11 @@ def apple_style_sheet() -> str:
         font-size: 12px;
         background: transparent;
     }
+    QLabel#fieldDescription {
+        color: #86868b;
+        font-size: 12px;
+        background: transparent;
+    }
     QFrame#card {
         background: #ffffff;
         border: 1px solid #e6e6eb;
@@ -153,11 +158,13 @@ def apple_style_sheet() -> str:
     QPushButton:pressed {
         background: #000000;
     }
-    QPushButton#secondary {
+    QPushButton#secondary,
+    QPushButton#applyExecutorChangeButton {
         background: #e9e9ef;
         color: #1d1d1f;
     }
-    QPushButton#secondary:hover {
+    QPushButton#secondary:hover,
+    QPushButton#applyExecutorChangeButton:hover {
         background: #dedee6;
     }
     QScrollArea {

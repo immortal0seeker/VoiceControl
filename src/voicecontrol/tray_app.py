@@ -21,10 +21,12 @@ from pystray import Icon, Menu, MenuItem
 from voicecontrol.config import settings
 from voicecontrol.control.commands import (
     PAUSE_LISTENING,
+    RELOAD_EXECUTOR,
     RESUME_LISTENING,
     START_RECORDING,
     STOP_RECORDING,
     read_control_command,
+    write_control_response,
 )
 from voicecontrol.events.status import StatusEvent, StatusPublisher, StatusType
 from voicecontrol.events.status_snapshot import RuntimeStatusSnapshotStore
@@ -111,6 +113,7 @@ class TrayApp:
         self._status_snapshot_store = RuntimeStatusSnapshotStore()
         self._is_recording = False
         self._desktop_pet_process: subprocess.Popen | None = None
+        self._orchestrator = None
         self._icon = Icon(
             "VoiceControl",
             icon=_load_tray_icon_image(),
@@ -182,6 +185,23 @@ class TrayApp:
             self._paused.clear()
             self._icon.title = "VoiceControl — 监听中"
             self._publish_runtime_status(StatusType.LISTENING, "listening")
+        elif command == RELOAD_EXECUTOR:
+            if self._orchestrator is None:
+                message = "Wake loop is not ready; executor was not reloaded."
+                logger.warning(message)
+                write_control_response(RELOAD_EXECUTOR, "error", message)
+            else:
+                try:
+                    self._orchestrator.reload_driver()
+                except Exception as exc:
+                    message = f"Executor reload failed: {exc}"
+                    logger.exception("Executor reload failed.")
+                    write_control_response(RELOAD_EXECUTOR, "error", message)
+                else:
+                    driver_name = self._orchestrator.driver.app_name
+                    message = f"Executor target switched to: {driver_name}"
+                    logger.info(message)
+                    write_control_response(RELOAD_EXECUTOR, "ok", message)
 
     def _on_open_settings(self, _icon: Icon, _item: object) -> None:
         try:
@@ -254,6 +274,7 @@ class TrayApp:
             from voicecontrol.wake_word.detector import WakeWordDetector
 
             orchestrator = VoiceOrchestrator()
+            self._orchestrator = orchestrator
             self._subscribe_status_events(orchestrator.status_publisher)
             self._status_speech = create_status_speech_subscriber(orchestrator.status_publisher)
             orchestrator.load()
@@ -279,7 +300,7 @@ class TrayApp:
     def _control_worker(self) -> None:
         while not self._stop_event.is_set():
             command = read_control_command()
-            if command in {START_RECORDING, STOP_RECORDING, PAUSE_LISTENING, RESUME_LISTENING}:
+            if command in {START_RECORDING, STOP_RECORDING, PAUSE_LISTENING, RESUME_LISTENING, RELOAD_EXECUTOR}:
                 logger.info("Control command received: %s.", command)
                 self._handle_control_command(command)
                 self._icon.update_menu()

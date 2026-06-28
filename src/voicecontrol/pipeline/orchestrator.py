@@ -69,6 +69,15 @@ class VoiceOrchestrator:
         """Pre-load the STT model so the first utterance isn't slow."""
         self.engine.load()
 
+    def reload_driver(self) -> None:
+        """Reload the executor driver from the latest config."""
+        from voicecontrol.config.manager import load_config
+        from voicecontrol.executor.router import create_driver_from_config
+
+        config = load_config()
+        self.driver = create_driver_from_config(config)
+        logger.info("Executor driver reloaded: %s", self.driver.app_name)
+
     def capture_until_silence(
         self,
         detector: EndpointDetector | None = None,

@@ -1,4 +1,4 @@
-"""Cursor driver."""
+"""Trae driver."""
 
 from __future__ import annotations
 
@@ -11,18 +11,20 @@ from voicecontrol.executor.window_utils import Window, WindowError, click_in_win
 logger = logging.getLogger(__name__)
 
 
-class CursorDriver(LaunchableAppDriver):
-    """Sends prompts to the Cursor window."""
+class TraeDriver(LaunchableAppDriver):
+    """Sends prompts to the Trae window."""
 
-    app_name = "Cursor"
-    AI_SIDEBAR_SHORTCUT = "ctrl+shift+k"
+    app_name = "Trae"
+    AI_SIDEBAR_SHORTCUT = "ctrl+u"
 
     def __init__(
         self,
-        window_title: str = settings.CURSOR_WINDOW_TITLE,
-        launch_command: str = settings.CURSOR_LAUNCH_COMMAND,
-        launch_timeout: float = settings.CURSOR_LAUNCH_TIMEOUT,
-        launch_poll_interval: float = settings.CURSOR_LAUNCH_POLL_INTERVAL,
+        window_title: str = settings.TRAE_WINDOW_TITLE,
+        launch_command: str = settings.TRAE_LAUNCH_COMMAND,
+        launch_timeout: float = settings.TRAE_LAUNCH_TIMEOUT,
+        launch_poll_interval: float = settings.TRAE_LAUNCH_POLL_INTERVAL,
+        composer_click_rel_x: float = settings.TRAE_COMPOSER_CLICK_REL_X,
+        composer_click_rel_y: float = settings.TRAE_COMPOSER_CLICK_REL_Y,
     ) -> None:
         super().__init__(
             window_title=window_title,
@@ -30,24 +32,16 @@ class CursorDriver(LaunchableAppDriver):
             launch_timeout=launch_timeout,
             launch_poll_interval=launch_poll_interval,
         )
+        self.composer_click_rel_x = composer_click_rel_x
+        self.composer_click_rel_y = composer_click_rel_y
 
     def _focus_composer(self, window: Window) -> None:
-        """Click the configured composer position."""
+        """Click the input box in the AI sidebar."""
         if settings.CLICK_COMPOSER_BEFORE_PASTE:
-            use_custom = (
-                settings.COMPOSER_CLICK_REL_X != 0.5
-                or settings.COMPOSER_CLICK_REL_Y != 0.9
-            )
-            if use_custom:
-                logger.info(
-                    "Using configured composer position (%.2f, %.2f)",
-                    settings.COMPOSER_CLICK_REL_X,
-                    settings.COMPOSER_CLICK_REL_Y,
-                )
             click_in_window(
                 window,
-                settings.COMPOSER_CLICK_REL_X,
-                settings.COMPOSER_CLICK_REL_Y,
+                self.composer_click_rel_x,
+                self.composer_click_rel_y,
                 settle_delay=settings.CLICK_SETTLE_DELAY,
             )
 
@@ -61,11 +55,11 @@ if __name__ == "__main__":
         if reconfigure is not None:
             reconfigure(encoding="utf-8")
 
-    driver = CursorDriver()
+    driver = TraeDriver()
     try:
         window = driver.find()
         print(f"Found {driver.app_name}: [{window.hwnd}] {window.title!r}")
-        driver.send_prompt("你好，这是一条来自 VoiceControl 的 Cursor 测试消息。")
+        driver.send_prompt("你好，这是一条来自 VoiceControl 的 Trae 测试消息。")
         print("Sent test prompt.")
     except WindowError as exc:
         print(f"ERROR: {exc}")

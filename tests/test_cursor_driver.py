@@ -40,6 +40,25 @@ class CursorDriverTests(unittest.TestCase):
         popen.assert_called_once_with(r"C:\Apps\Cursor\Cursor.exe")
         focus_window.assert_called_once()
 
+    def test_default_composer_focus_clicks_one_candidate_position(self) -> None:
+        window = Window(hwnd=987, title="Cursor")
+        driver = CursorDriver()
+
+        with (
+            patch.object(settings, "CLICK_COMPOSER_BEFORE_PASTE", True),
+            patch.object(settings, "COMPOSER_CLICK_REL_X", 0.5),
+            patch.object(settings, "COMPOSER_CLICK_REL_Y", 0.9),
+            patch("voicecontrol.executor.cursor_driver.click_in_window") as click,
+        ):
+            driver._focus_composer(window)
+
+        click.assert_called_once_with(
+            window,
+            0.5,
+            0.9,
+            settle_delay=settings.CLICK_SETTLE_DELAY,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

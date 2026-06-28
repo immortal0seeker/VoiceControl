@@ -37,6 +37,8 @@
     "trae_launch_command": "explorer.exe shell:AppsFolder\\ByteDance.TraeCN",
     "trae_launch_timeout": 15.0,
     "trae_launch_poll_interval": 0.5,
+    "trae_composer_click_rel_x": 0.85,
+    "trae_composer_click_rel_y": 0.88,
     "send_prompt_auto_enter": true,
     "click_composer_before_paste": true,
     "composer_click_rel_x": 0.5,
@@ -63,5 +65,8 @@
   "hotkeys": {
     "record_hotkey": "f9",
     "quit_hotkey": "esc"
+  },
+  "desktop_pet": {
+    "animation_enabled": true
   }
 }

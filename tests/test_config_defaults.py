@@ -4,7 +4,7 @@ import unittest
 
 from voicecontrol.config.manager import CONFIG_PATH, load_config
 from voicecontrol.config import settings
-from voicecontrol.control.commands import CONTROL_COMMAND_PATH
+from voicecontrol.control.commands import CONTROL_COMMAND_PATH, CONTROL_RESPONSE_PATH
 
 
 class CheckedInConfigTests(unittest.TestCase):
@@ -59,6 +59,7 @@ class CheckedInConfigTests(unittest.TestCase):
         self.assertEqual(settings.DIAGNOSTICS_HISTORY_PATH, settings.DIAGNOSTICS_DIR / "diagnostics.jsonl")
         self.assertEqual(settings.RUNTIME_STATUS_PATH, settings.RUNTIME_DIR / "runtime_status.json")
         self.assertEqual(CONTROL_COMMAND_PATH, settings.RUNTIME_DIR / "control_command.json")
+        self.assertEqual(CONTROL_RESPONSE_PATH, settings.RUNTIME_DIR / "control_response.json")
 
 
 if __name__ == "__main__":
