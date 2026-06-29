@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
+
+import keyboard
 
 from voicecontrol.config import settings
 from voicecontrol.executor.app_driver import LaunchableAppDriver
@@ -23,8 +26,9 @@ class TraeDriver(LaunchableAppDriver):
         launch_command: str = settings.TRAE_LAUNCH_COMMAND,
         launch_timeout: float = settings.TRAE_LAUNCH_TIMEOUT,
         launch_poll_interval: float = settings.TRAE_LAUNCH_POLL_INTERVAL,
-        composer_click_rel_x: float = settings.TRAE_COMPOSER_CLICK_REL_X,
-        composer_click_rel_y: float = settings.TRAE_COMPOSER_CLICK_REL_Y,
+        neutral_click_rel_x: float = settings.TRAE_NEUTRAL_CLICK_REL_X,
+        neutral_click_rel_y: float = settings.TRAE_NEUTRAL_CLICK_REL_Y,
+        ai_sidebar_shortcut: str = settings.TRAE_AI_SIDEBAR_SHORTCUT,
     ) -> None:
         super().__init__(
             window_title=window_title,
@@ -32,18 +36,21 @@ class TraeDriver(LaunchableAppDriver):
             launch_timeout=launch_timeout,
             launch_poll_interval=launch_poll_interval,
         )
-        self.composer_click_rel_x = composer_click_rel_x
-        self.composer_click_rel_y = composer_click_rel_y
+        self.neutral_click_rel_x = neutral_click_rel_x
+        self.neutral_click_rel_y = neutral_click_rel_y
+        self.ai_sidebar_shortcut = ai_sidebar_shortcut
 
     def _focus_composer(self, window: Window) -> None:
-        """Click the input box in the AI sidebar."""
+        """Defocus Trae's AI sidebar, then use its shortcut to focus input."""
         if settings.CLICK_COMPOSER_BEFORE_PASTE:
             click_in_window(
                 window,
-                self.composer_click_rel_x,
-                self.composer_click_rel_y,
+                self.neutral_click_rel_x,
+                self.neutral_click_rel_y,
                 settle_delay=settings.CLICK_SETTLE_DELAY,
             )
+            keyboard.send(self.ai_sidebar_shortcut)
+            time.sleep(settings.CLICK_SETTLE_DELAY)
 
 
 if __name__ == "__main__":

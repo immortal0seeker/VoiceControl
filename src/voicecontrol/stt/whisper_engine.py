@@ -10,11 +10,13 @@ back to ``cpu``/``int8`` if CUDA is unavailable.
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 from faster_whisper import WhisperModel
 
 from voicecontrol.config import settings
+from voicecontrol.stt.engine import TranscriptionResult
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,8 @@ class TranscriptionError(RuntimeError):
 
 class WhisperEngine:
     """Thin wrapper around a faster-whisper model with lazy loading."""
+
+    engine_name = "faster_whisper"
 
     def __init__(
         self,
@@ -72,8 +76,8 @@ class WhisperEngine:
             else:
                 raise TranscriptionError(f"Failed to load Whisper model: {exc}") from exc
 
-    def transcribe_file(self, path: str | Path) -> str:
-        """Transcribe a WAV/audio file and return normalized plain text."""
+    def transcribe_file(self, path: str | Path) -> TranscriptionResult:
+        """Transcribe a WAV/audio file and return normalized text with metadata."""
         audio_path = Path(path)
         if not audio_path.is_file():
             raise TranscriptionError(f"Audio file not found: {audio_path}")
@@ -82,6 +86,7 @@ class WhisperEngine:
         assert self._model is not None
 
         try:
+            started_at = time.perf_counter()
             segments, info = self._model.transcribe(
                 str(audio_path),
                 language=self.language,
@@ -90,6 +95,7 @@ class WhisperEngine:
                 condition_on_previous_text=self.condition_on_previous_text,
             )
             text = "".join(segment.text for segment in segments).strip()
+            duration_seconds = time.perf_counter() - started_at
         except Exception as exc:
             raise TranscriptionError(f"Transcription failed for {audio_path}: {exc}") from exc
 
@@ -99,7 +105,14 @@ class WhisperEngine:
         )
         if not text:
             logger.warning("Transcription produced empty text for %s", audio_path)
-        return text
+        return TranscriptionResult(
+            text=text,
+            engine=self.engine_name,
+            model=self.model_size,
+            language=info.language,
+            language_probability=info.language_probability,
+            duration_seconds=duration_seconds,
+        )
 
 
 if __name__ == "__main__":
@@ -108,6 +121,6 @@ if __name__ == "__main__":
     try:
         engine = WhisperEngine()
         result = engine.transcribe_file(wav_path)
-        print(f"\nRecognized text:\n{result!r}")
+        print(f"\nRecognized text:\n{result.text!r}")
     except TranscriptionError as exc:
         print(f"ERROR: {exc}")

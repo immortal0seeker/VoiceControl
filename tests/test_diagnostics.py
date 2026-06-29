@@ -11,9 +11,12 @@ import numpy as np
 
 from voicecontrol.diagnostics.logs import read_recent_log_lines
 from voicecontrol.diagnostics.microphone import run_microphone_test
+from voicecontrol.diagnostics.executor_send import run_executor_send_test
+from voicecontrol.diagnostics.stt_model_compare import run_stt_model_compare
 from voicecontrol.diagnostics.store import DiagnosticResult, append_diagnostic_result
 from voicecontrol.diagnostics.vad import run_vad_file_test
 from voicecontrol.diagnostics.wake_word import run_wake_word_file_test
+from voicecontrol.stt.engine import TranscriptionResult
 
 
 class DiagnosticsTests(unittest.TestCase):
@@ -104,6 +107,75 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.details["max_score"], 0.8)
         self.assertTrue(result.details["detected"])
+
+    def test_run_executor_send_test_can_paste_without_enter(self) -> None:
+        driver = Mock()
+        driver.app_name = "Trae"
+        config = {"executor": {"default_target": "trae"}}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            diagnostic_path = Path(temp_dir) / "diagnostics.jsonl"
+            with patch(
+                "voicecontrol.diagnostics.executor_send.create_driver_from_config",
+                return_value=driver,
+            ) as create_driver:
+                result = run_executor_send_test(
+                    config=config,
+                    target="trae",
+                    text="VoiceControl safe calibration",
+                    auto_enter=False,
+                    diagnostic_path=diagnostic_path,
+                )
+
+            saved = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+
+        create_driver.assert_called_once_with(config, "trae")
+        driver.send_prompt.assert_called_once_with(
+            "VoiceControl safe calibration",
+            auto_enter=False,
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details["target"], "trae")
+        self.assertFalse(result.details["auto_enter"])
+        self.assertEqual(saved["name"], "executor_send")
+
+    def test_run_stt_model_compare_transcribes_each_model(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "command.wav"
+            audio_path.write_bytes(b"wav")
+            diagnostic_path = Path(temp_dir) / "diagnostics.jsonl"
+
+            def make_engine(*, model_size: str):
+                engine = Mock()
+                engine.transcribe_file.return_value = TranscriptionResult(
+                    text=f"{model_size} text",
+                    engine="faster_whisper",
+                    model=model_size,
+                    language="zh",
+                    language_probability=0.9,
+                    duration_seconds=0.12,
+                )
+                return engine
+
+            with patch(
+                "voicecontrol.diagnostics.stt_model_compare.WhisperEngine",
+                side_effect=make_engine,
+            ) as whisper_engine:
+                result = run_stt_model_compare(
+                    audio_path,
+                    models=("small", "medium"),
+                    diagnostic_path=diagnostic_path,
+                )
+            saved = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            [call.kwargs["model_size"] for call in whisper_engine.call_args_list],
+            ["small", "medium"],
+        )
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.details["audio_path"], str(audio_path))
+        self.assertEqual(result.details["models"]["small"]["text"], "small text")
+        self.assertEqual(result.details["models"]["medium"]["text"], "medium text")
+        self.assertEqual(saved["name"], "stt_model_compare")
 
 
 if __name__ == "__main__":

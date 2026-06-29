@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QComboBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from voicecontrol.config.manager import ConfigError, load_config, save_config
+from voicecontrol.config import settings
 from voicecontrol.control.commands import RELOAD_EXECUTOR, read_control_response, write_control_command
 from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.config_binding import Binding, get_nested, optional_float_text, register, set_nested
@@ -126,10 +128,15 @@ class SettingsPage(QWidget):
 
     def _add_stt_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Speech Recognition")
-        whisper_model = combo(
-            get_nested(self._config, ("stt", "whisper_model_size")),
-            ["small", "medium", "large-v3"],
-        )
+        current_profile = get_nested(self._config, ("stt", "whisper_model_profile"))
+        whisper_profile = QComboBox()
+        whisper_profile.setObjectName("sttWhisperModelProfile")
+        whisper_profile.addItem("Whisper small - balanced", "balanced_small")
+        whisper_profile.addItem("Whisper medium - accuracy", "accuracy_medium")
+        profile_index = whisper_profile.findData(current_profile)
+        if profile_index >= 0:
+            whisper_profile.setCurrentIndex(profile_index)
+        whisper_profile.setMinimumWidth(220)
         whisper_device = combo(
             get_nested(self._config, ("stt", "whisper_device")), ["cuda", "cpu"]
         )
@@ -140,13 +147,18 @@ class SettingsPage(QWidget):
         whisper_beam = int_spin(get_nested(self._config, ("stt", "whisper_beam_size")), 1, 10)
         whisper_vad = switch(get_nested(self._config, ("stt", "whisper_vad_filter")))
 
-        add_row(layout, "Whisper 模型", whisper_model, "small 更快，medium/large-v3 更准但更吃显存。")
+        add_row(layout, "Whisper 模型档位", whisper_profile, "small 更快，medium 更准但更吃显存。")
         add_row(layout, "计算设备", whisper_device, "有 NVIDIA CUDA 时用 cuda；否则用 cpu。")
         add_row(layout, "计算精度", whisper_compute, "GPU 常用 float16，CPU 常用 int8。")
         add_row(layout, "Beam Size", whisper_beam, "越大可能更准，但速度更慢。")
         add_row(layout, "Whisper VAD 过滤", whisper_vad, "过滤静音和噪声，减少幻觉文本。")
 
-        register(self._bindings, ("stt", "whisper_model_size"), whisper_model.currentText)
+        register(self._bindings, ("stt", "whisper_model_profile"), whisper_profile.currentData)
+        register(
+            self._bindings,
+            ("stt", "whisper_model_size"),
+            lambda: settings.resolve_whisper_model_profile(str(whisper_profile.currentData())),
+        )
         register(self._bindings, ("stt", "whisper_device"), whisper_device.currentText)
         register(self._bindings, ("stt", "whisper_compute_type"), whisper_compute.currentText)
         register(self._bindings, ("stt", "whisper_beam_size"), whisper_beam.value)
@@ -244,10 +256,10 @@ class SettingsPage(QWidget):
                 "trae_window_title",
                 "trae_launch_command",
                 "Trae",
-                "trae_composer_click_rel_x",
-                "trae_composer_click_rel_y",
-                "traeComposerClickRelX",
-                "traeComposerClickRelY",
+                None,
+                None,
+                "shortcutFocusRelX",
+                "shortcutFocusRelY",
             ),
         }
 
@@ -305,7 +317,6 @@ class SettingsPage(QWidget):
         click_y.setObjectName(click_y_object_name)
         click_x.setEnabled(click_x_key is not None)
         click_y.setEnabled(click_y_key is not None)
-
         title_row_layout = QHBoxLayout()
         title_row_layout.addWidget(window_title_label)
         title_row_layout.addWidget(window_title_edit)
@@ -418,16 +429,6 @@ class SettingsPage(QWidget):
             self._bindings,
             ("executor", "cursor_composer_click_rel_y"),
             lambda: get_nested(self._config, ("executor", "cursor_composer_click_rel_y")),
-        )
-        register(
-            self._bindings,
-            ("executor", "trae_composer_click_rel_x"),
-            lambda: selected_value("trae", "trae_composer_click_rel_x", click_x.value),
-        )
-        register(
-            self._bindings,
-            ("executor", "trae_composer_click_rel_y"),
-            lambda: selected_value("trae", "trae_composer_click_rel_y", click_y.value),
         )
         content_layout.addWidget(frame)
 

@@ -25,8 +25,9 @@ class ExecutorRouterTests(unittest.TestCase):
                 "trae_launch_command": r"C:\Apps\Trae\Trae.exe",
                 "trae_launch_timeout": 7.0,
                 "trae_launch_poll_interval": 0.25,
-                "trae_composer_click_rel_x": 0.77,
-                "trae_composer_click_rel_y": 0.88,
+                "trae_neutral_click_rel_x": 0.51,
+                "trae_neutral_click_rel_y": 0.98,
+                "trae_ai_sidebar_shortcut": "ctrl+u",
             }
         }
 
@@ -37,8 +38,12 @@ class ExecutorRouterTests(unittest.TestCase):
         self.assertEqual(driver.launch_command, r"C:\Apps\Trae\Trae.exe")
         self.assertEqual(driver.launch_timeout, 7.0)
         self.assertEqual(driver.launch_poll_interval, 0.25)
-        self.assertEqual(driver.composer_click_rel_x, 0.77)
-        self.assertEqual(driver.composer_click_rel_y, 0.88)
+        self.assertFalse(hasattr(driver, "composer_click_rel_x"))
+        self.assertFalse(hasattr(driver, "composer_click_rel_y"))
+        self.assertFalse(hasattr(driver, "focus_strategy"))
+        self.assertEqual(driver.neutral_click_rel_x, 0.51)
+        self.assertEqual(driver.neutral_click_rel_y, 0.98)
+        self.assertEqual(driver.ai_sidebar_shortcut, "ctrl+u")
 
     def test_create_cursor_driver_from_config_ignores_cursor_composer_position(self) -> None:
         config = {

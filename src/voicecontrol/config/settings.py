@@ -48,8 +48,14 @@ VAD_MAX_RECORD_SECONDS: float | None = 180.0  # None disables the hard cap.
 VAD_START_TIMEOUT: float = 8.0         # give up if no speech starts at all
 VAD_POLL_INTERVAL: float = 0.15        # how often to re-check the buffer (s)
 
-# --- Speech-to-text (faster-whisper) ---------------------------------------
-WHISPER_MODEL_SIZE: str = "small"          # upgrade path: medium -> large-v3
+# --- Speech-to-text ---------------------------------------------------------
+STT_PROVIDER: str = "faster_whisper"
+WHISPER_MODEL_PROFILES: dict[str, str] = {
+    "balanced_small": "small",
+    "accuracy_medium": "medium",
+}
+WHISPER_MODEL_PROFILE: str = "balanced_small"
+WHISPER_MODEL_SIZE: str = "small"          # stable choices: small / medium
 WHISPER_DEVICE: str = "cuda"               # fallback "cpu"
 WHISPER_COMPUTE_TYPE: str = "float16"      # fallback "int8"
 # Chinese-primary, English also expected; None lets Whisper auto-detect.
@@ -86,8 +92,9 @@ TRAE_WINDOW_TITLE: str = "Trae"
 TRAE_LAUNCH_COMMAND: str = ""
 TRAE_LAUNCH_TIMEOUT: float = 15.0
 TRAE_LAUNCH_POLL_INTERVAL: float = 0.5
-TRAE_COMPOSER_CLICK_REL_X: float = 0.9
-TRAE_COMPOSER_CLICK_REL_Y: float = 0.95
+TRAE_NEUTRAL_CLICK_REL_X: float = 0.5
+TRAE_NEUTRAL_CLICK_REL_Y: float = 0.98
+TRAE_AI_SIDEBAR_SHORTCUT: str = "ctrl+u"
 # Press Enter after pasting to submit the prompt.
 SEND_PROMPT_AUTO_ENTER: bool = True
 # Delays (seconds) around desktop actions — keep small but non-zero (AGENTS §6).
@@ -153,6 +160,15 @@ def log_file_path() -> Path:
 AUTOSTART_APP_NAME: str = "VoiceControl"
 
 
+def resolve_whisper_model_profile(profile: str) -> str:
+    """Return the Whisper model size for a stable user-facing profile."""
+    try:
+        return WHISPER_MODEL_PROFILES[profile]
+    except KeyError as exc:
+        valid = ", ".join(sorted(WHISPER_MODEL_PROFILES))
+        raise ValueError(f"Unknown Whisper model profile {profile!r}; expected one of: {valid}") from exc
+
+
 _USER_CONFIG = load_config(PROJECT_ROOT / "config.json")
 
 _AUDIO_CONFIG = _USER_CONFIG["audio"]
@@ -171,6 +187,8 @@ VAD_START_TIMEOUT = _VAD_CONFIG["start_timeout"]
 VAD_POLL_INTERVAL = _VAD_CONFIG["poll_interval"]
 
 _STT_CONFIG = _USER_CONFIG["stt"]
+STT_PROVIDER = _STT_CONFIG["provider"]
+WHISPER_MODEL_PROFILE = _STT_CONFIG["whisper_model_profile"]
 WHISPER_MODEL_SIZE = _STT_CONFIG["whisper_model_size"]
 WHISPER_DEVICE = _STT_CONFIG["whisper_device"]
 WHISPER_COMPUTE_TYPE = _STT_CONFIG["whisper_compute_type"]
@@ -199,8 +217,9 @@ TRAE_WINDOW_TITLE = _EXECUTOR_CONFIG["trae_window_title"]
 TRAE_LAUNCH_COMMAND = _EXECUTOR_CONFIG["trae_launch_command"]
 TRAE_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["trae_launch_timeout"]
 TRAE_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["trae_launch_poll_interval"]
-TRAE_COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["trae_composer_click_rel_x"]
-TRAE_COMPOSER_CLICK_REL_Y = _EXECUTOR_CONFIG["trae_composer_click_rel_y"]
+TRAE_NEUTRAL_CLICK_REL_X = _EXECUTOR_CONFIG["trae_neutral_click_rel_x"]
+TRAE_NEUTRAL_CLICK_REL_Y = _EXECUTOR_CONFIG["trae_neutral_click_rel_y"]
+TRAE_AI_SIDEBAR_SHORTCUT = _EXECUTOR_CONFIG["trae_ai_sidebar_shortcut"]
 SEND_PROMPT_AUTO_ENTER = _EXECUTOR_CONFIG["send_prompt_auto_enter"]
 CLICK_COMPOSER_BEFORE_PASTE = _EXECUTOR_CONFIG["click_composer_before_paste"]
 COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["composer_click_rel_x"]

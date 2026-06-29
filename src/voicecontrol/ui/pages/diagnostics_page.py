@@ -9,12 +9,12 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
+from voicecontrol.diagnostics.executor_send import run_executor_send_test
 from voicecontrol.diagnostics.microphone import run_microphone_test
+from voicecontrol.diagnostics.stt_model_compare import run_stt_model_compare
 from voicecontrol.diagnostics.store import DiagnosticResult
 from voicecontrol.diagnostics.vad import run_vad_file_test
 from voicecontrol.diagnostics.wake_word import run_wake_word_file_test
-from voicecontrol.executor.router import get_default_driver
-from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.tts.speaker import TextSpeaker, TtsError
 from voicecontrol.ui.pages.base import page_layout
 from voicecontrol.ui.widgets import card, line_edit
@@ -155,8 +155,9 @@ class DiagnosticsPage(QWidget):
         self._add_microphone_card(content_layout)
         self._add_vad_card(content_layout)
         self._add_wake_word_card(content_layout)
+        self._add_stt_card(content_layout)
         self._add_tts_card(content_layout)
-        self._add_codex_card(content_layout)
+        self._add_executor_card(content_layout)
         content_layout.addStretch(1)
 
         scroll.setWidget(content)
@@ -207,6 +208,19 @@ class DiagnosticsPage(QWidget):
         root_layout.addWidget(frame)
         run_button.clicked.connect(self._run_wake_word)
 
+    def _add_stt_card(self, root_layout: QVBoxLayout) -> None:
+        frame, layout = card("STT 模型对比")
+        run_button = QPushButton("用最近录音比较 small / medium")
+        run_button.setObjectName("runSttModelCompareButton")
+        self._stt_compare_run_button = run_button
+        self._stt_compare_result_label = _make_selectable(QLabel("尚未运行。"))
+        self._stt_compare_result_label.setObjectName("sttModelCompareResultLabel")
+        self._stt_compare_result_label.setWordWrap(True)
+        layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self._stt_compare_result_label)
+        root_layout.addWidget(frame)
+        run_button.clicked.connect(self._run_stt_compare)
+
     def _add_tts_card(self, root_layout: QVBoxLayout) -> None:
         frame, layout = card("TTS 状态提示")
         run_button = QPushButton("测试 TTS")
@@ -219,17 +233,21 @@ class DiagnosticsPage(QWidget):
         root_layout.addWidget(frame)
         run_button.clicked.connect(self._run_tts)
 
-    def _add_codex_card(self, root_layout: QVBoxLayout) -> None:
-        frame, layout = card("Codex 发送")
-        run_button = QPushButton("测试发送到 Codex")
+    def _add_executor_card(self, root_layout: QVBoxLayout) -> None:
+        frame, layout = card("目标应用发送")
+        draft_button = QPushButton("只粘贴不回车")
+        draft_button.setObjectName("testPasteToTargetDraftButton")
+        run_button = QPushButton("粘贴并发送到当前目标")
         run_button.setObjectName("testSendToCodexButton")
         self._codex_result_label = _make_selectable(QLabel("尚未运行。"))
         self._codex_result_label.setObjectName("codexSendDiagnosticResultLabel")
         self._codex_result_label.setWordWrap(True)
+        layout.addWidget(draft_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self._codex_result_label)
         root_layout.addWidget(frame)
-        run_button.clicked.connect(self._run_codex_send)
+        draft_button.clicked.connect(lambda: self._run_executor_send(auto_enter=False))
+        run_button.clicked.connect(lambda: self._run_executor_send(auto_enter=True))
 
     def _run_microphone(self) -> None:
         self._run_diagnostic(
@@ -260,6 +278,13 @@ class DiagnosticsPage(QWidget):
             lambda: run_wake_word_file_test(wav_path, diagnostic_path=self._diagnostic_path),
         )
 
+    def _run_stt_compare(self) -> None:
+        self._run_diagnostic(
+            self._stt_compare_run_button,
+            self._stt_compare_result_label,
+            lambda: run_stt_model_compare(diagnostic_path=self._diagnostic_path),
+        )
+
     def _run_tts(self) -> None:
         try:
             tts_config = self._config.get("tts", {})
@@ -274,13 +299,14 @@ class DiagnosticsPage(QWidget):
             return
         self._tts_result_label.setText("TTS 测试已发送。")
 
-    def _run_codex_send(self) -> None:
-        try:
-            get_default_driver().send_prompt("这是一条来自 VoiceControl 控制中心的测试消息。")
-        except WindowError as exc:
-            self._codex_result_label.setText(f"发送测试失败：{exc}")
-            return
-        self._codex_result_label.setText("发送测试已提交。")
+    def _run_executor_send(self, *, auto_enter: bool) -> None:
+        result = run_executor_send_test(
+            config=self._config,
+            target=None,
+            auto_enter=auto_enter,
+            diagnostic_path=self._diagnostic_path,
+        )
+        self._codex_result_label.setText(_format_diagnostic_result(result))
 
     def _run_diagnostic(
         self,

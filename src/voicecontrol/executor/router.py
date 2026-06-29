@@ -89,13 +89,17 @@ def create_driver_from_config(config: dict[str, Any], target: str | None = None)
                 "trae_launch_poll_interval",
                 settings.TRAE_LAUNCH_POLL_INTERVAL,
             ),
-            composer_click_rel_x=executor.get(
-                "trae_composer_click_rel_x",
-                settings.TRAE_COMPOSER_CLICK_REL_X,
+            neutral_click_rel_x=executor.get(
+                "trae_neutral_click_rel_x",
+                settings.TRAE_NEUTRAL_CLICK_REL_X,
             ),
-            composer_click_rel_y=executor.get(
-                "trae_composer_click_rel_y",
-                settings.TRAE_COMPOSER_CLICK_REL_Y,
+            neutral_click_rel_y=executor.get(
+                "trae_neutral_click_rel_y",
+                settings.TRAE_NEUTRAL_CLICK_REL_Y,
+            ),
+            ai_sidebar_shortcut=executor.get(
+                "trae_ai_sidebar_shortcut",
+                settings.TRAE_AI_SIDEBAR_SHORTCUT,
             ),
         )
     choices = ", ".join(sorted(DRIVER_FACTORIES))

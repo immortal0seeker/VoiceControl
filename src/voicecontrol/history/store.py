@@ -20,6 +20,11 @@ class CommandHistoryRecord:
     sent: bool
     send_error: str | None = None
     error: str | None = None
+    raw_text: str | None = None
+    stt_engine: str | None = None
+    stt_model: str | None = None
+    stt_language: str | None = None
+    stt_language_probability: float | None = None
     created_at: datetime = field(default_factory=datetime.now)
 
     def to_json_dict(self) -> dict[str, object]:
@@ -30,6 +35,11 @@ class CommandHistoryRecord:
             "sent": self.sent,
             "send_error": self.send_error,
             "error": self.error,
+            "raw_text": self.raw_text,
+            "stt_engine": self.stt_engine,
+            "stt_model": self.stt_model,
+            "stt_language": self.stt_language,
+            "stt_language_probability": self.stt_language_probability,
         }
 
     @classmethod
@@ -46,6 +56,15 @@ class CommandHistoryRecord:
             sent=bool(data.get("sent")),
             send_error=data.get("send_error") if isinstance(data.get("send_error"), str) else None,
             error=data.get("error") if isinstance(data.get("error"), str) else None,
+            raw_text=data.get("raw_text") if isinstance(data.get("raw_text"), str) else None,
+            stt_engine=data.get("stt_engine") if isinstance(data.get("stt_engine"), str) else None,
+            stt_model=data.get("stt_model") if isinstance(data.get("stt_model"), str) else None,
+            stt_language=data.get("stt_language") if isinstance(data.get("stt_language"), str) else None,
+            stt_language_probability=(
+                float(data["stt_language_probability"])
+                if isinstance(data.get("stt_language_probability"), int | float)
+                else None
+            ),
             created_at=created_at,
         )
 

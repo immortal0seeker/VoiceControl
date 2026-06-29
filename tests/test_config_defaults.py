@@ -26,10 +26,30 @@ class CheckedInConfigTests(unittest.TestCase):
             },
         )
 
+    def test_checked_in_config_has_stt_provider_and_model_profile(self) -> None:
+        config = load_config(CONFIG_PATH)
+
+        self.assertEqual(config["stt"]["provider"], "faster_whisper")
+        self.assertIn(config["stt"]["whisper_model_size"], {"small", "medium"})
+        self.assertIn(
+            config["stt"]["whisper_model_profile"],
+            {"balanced_small", "accuracy_medium"},
+        )
+        self.assertEqual(settings.STT_PROVIDER, "faster_whisper")
+        self.assertIn(settings.WHISPER_MODEL_PROFILE, {"balanced_small", "accuracy_medium"})
+
+    def test_stt_model_profiles_resolve_to_whisper_model_sizes(self) -> None:
+        self.assertEqual(settings.resolve_whisper_model_profile("balanced_small"), "small")
+        self.assertEqual(settings.resolve_whisper_model_profile("accuracy_medium"), "medium")
+        self.assertEqual(
+            settings.WHISPER_MODEL_SIZE,
+            settings.resolve_whisper_model_profile(settings.WHISPER_MODEL_PROFILE),
+        )
+
     def test_checked_in_config_has_executor_launch_commands(self) -> None:
         config = load_config(CONFIG_PATH)
 
-        self.assertEqual(config["executor"]["default_target"], "cursor")
+        self.assertEqual(config["executor"]["default_target"], "chatgpt")
         self.assertEqual(
             config["executor"]["codex_launch_command"],
             "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
@@ -48,6 +68,12 @@ class CheckedInConfigTests(unittest.TestCase):
         self.assertEqual(config["executor"]["cursor_composer_click_rel_x"], 0.83)
         self.assertEqual(config["executor"]["cursor_composer_click_rel_y"], 0.97)
         self.assertEqual(config["executor"]["trae_launch_command"], "explorer.exe shell:AppsFolder\\ByteDance.TraeCN")
+        self.assertNotIn("trae_composer_click_rel_x", config["executor"])
+        self.assertNotIn("trae_composer_click_rel_y", config["executor"])
+        self.assertNotIn("trae_focus_strategy", config["executor"])
+        self.assertEqual(config["executor"]["trae_neutral_click_rel_x"], 0.5)
+        self.assertEqual(config["executor"]["trae_neutral_click_rel_y"], 0.98)
+        self.assertEqual(config["executor"]["trae_ai_sidebar_shortcut"], "ctrl+u")
 
     def test_runtime_files_are_grouped_by_purpose_under_logs(self) -> None:
         self.assertEqual(settings.LOG_DIR.name, "logs")

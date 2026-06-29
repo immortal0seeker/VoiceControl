@@ -3,6 +3,8 @@
     "input_device": null
   },
   "stt": {
+    "provider": "faster_whisper",
+    "whisper_model_profile": "balanced_small",
     "whisper_model_size": "small",
     "whisper_device": "cuda",
     "whisper_compute_type": "float16",
@@ -20,7 +22,7 @@
     "poll_interval": 0.15
   },
   "executor": {
-    "default_target": "cursor",
+    "default_target": "chatgpt",
     "codex_window_title": "Codex",
     "codex_launch_command": "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
     "codex_launch_timeout": 15.0,
@@ -39,8 +41,9 @@
     "trae_launch_command": "explorer.exe shell:AppsFolder\\ByteDance.TraeCN",
     "trae_launch_timeout": 15.0,
     "trae_launch_poll_interval": 0.5,
-    "trae_composer_click_rel_x": 0.85,
-    "trae_composer_click_rel_y": 0.88,
+    "trae_neutral_click_rel_x": 0.5,
+    "trae_neutral_click_rel_y": 0.98,
+    "trae_ai_sidebar_shortcut": "ctrl+u",
     "send_prompt_auto_enter": true,
     "click_composer_before_paste": true,
     "composer_click_rel_x": 0.5,

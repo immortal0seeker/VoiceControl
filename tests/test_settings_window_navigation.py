@@ -121,36 +121,25 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         target = window.findChild(QComboBox, "executorTargetCombo")
 
         self.assertIsNotNone(target)
-        self.assertEqual(target.currentText(), "cursor")
+        self.assertEqual(target.currentText(), "chatgpt")
         self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor", "trae"])
 
-    def test_settings_page_binds_trae_composer_coordinates(self) -> None:
+    def test_settings_page_hides_trae_click_strategy_controls(self) -> None:
         from PySide6.QtWidgets import QDoubleSpinBox
 
         config = load_config()
         config["executor"]["default_target"] = "trae"
-        config["executor"]["trae_composer_click_rel_x"] = 0.33
-        config["executor"]["trae_composer_click_rel_y"] = 0.44
+        config["executor"]["trae_neutral_click_rel_x"] = 0.55
+        config["executor"]["trae_neutral_click_rel_y"] = 0.98
+        config["executor"]["trae_ai_sidebar_shortcut"] = "ctrl+u"
         window = SettingsWindow(config)
 
-        click_x = window.findChild(QDoubleSpinBox, "traeComposerClickRelX")
-        click_y = window.findChild(QDoubleSpinBox, "traeComposerClickRelY")
-
-        self.assertIsNotNone(click_x)
-        self.assertIsNotNone(click_y)
-        self.assertAlmostEqual(click_x.value(), 0.33)
-        self.assertAlmostEqual(click_y.value(), 0.44)
-
-        click_x.setValue(0.66)
-        click_y.setValue(0.77)
-        next_config = load_config()
-        settings_page = window.findChild(QWidget, "settingsPage")
-        self.assertIsNotNone(settings_page)
-        for path, reader in settings_page._bindings:
-            set_nested(next_config, path, reader())
-
-        self.assertAlmostEqual(next_config["executor"]["trae_composer_click_rel_x"], 0.66)
-        self.assertAlmostEqual(next_config["executor"]["trae_composer_click_rel_y"], 0.77)
+        self.assertIsNone(window.findChild(QDoubleSpinBox, "traeComposerClickRelX"))
+        self.assertIsNone(window.findChild(QDoubleSpinBox, "traeComposerClickRelY"))
+        self.assertIsNone(window.findChild(QWidget, "traeFocusStrategy"))
+        self.assertIsNone(window.findChild(QWidget, "traeNeutralClickRelX"))
+        self.assertIsNone(window.findChild(QWidget, "traeNeutralClickRelY"))
+        self.assertIsNone(window.findChild(QWidget, "traeAiSidebarShortcut"))
 
     def test_settings_page_hides_cursor_composer_coordinates(self) -> None:
         from PySide6.QtWidgets import QDoubleSpinBox
@@ -197,6 +186,31 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QWidget, "ttsVolume"))
         self.assertIsNotNone(window.findChild(QLineEdit, "ttsVoice"))
         self.assertIsNotNone(window.findChild(QPushButton, "testTtsButton"))
+
+    def test_settings_page_binds_stt_model_profile_to_model_size(self) -> None:
+        config = load_config()
+        config["stt"]["whisper_model_profile"] = "balanced_small"
+        config["stt"]["whisper_model_size"] = "small"
+        window = SettingsWindow(config)
+
+        profile = window.findChild(QComboBox, "sttWhisperModelProfile")
+
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.currentData(), "balanced_small")
+        self.assertEqual(
+            [profile.itemData(index) for index in range(profile.count())],
+            ["balanced_small", "accuracy_medium"],
+        )
+
+        profile.setCurrentIndex(1)
+        next_config = load_config()
+        settings_page = window.findChild(QWidget, "settingsPage")
+        self.assertIsNotNone(settings_page)
+        for path, reader in settings_page._bindings:
+            set_nested(next_config, path, reader())
+
+        self.assertEqual(next_config["stt"]["whisper_model_profile"], "accuracy_medium")
+        self.assertEqual(next_config["stt"]["whisper_model_size"], "medium")
 
     def test_settings_page_exposes_desktop_pet_controls(self) -> None:
         window = SettingsWindow(load_config())
@@ -507,14 +521,18 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             tts_button = window.findChild(QPushButton, "backgroundTestTtsButton")
             tts_result = window.findChild(QLabel, "ttsDiagnosticResultLabel")
             codex_button = window.findChild(QPushButton, "testSendToCodexButton")
+            draft_button = window.findChild(QPushButton, "testPasteToTargetDraftButton")
             codex_result = window.findChild(QLabel, "codexSendDiagnosticResultLabel")
+            stt_compare_button = window.findChild(QPushButton, "runSttModelCompareButton")
+            stt_compare_result = window.findChild(QLabel, "sttModelCompareResultLabel")
 
             with (
                 patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone,
                 patch("voicecontrol.ui.pages.diagnostics_page.run_vad_file_test") as vad,
                 patch("voicecontrol.ui.pages.diagnostics_page.run_wake_word_file_test") as wake_word,
+                patch("voicecontrol.ui.pages.diagnostics_page.run_executor_send_test") as executor_send,
+                patch("voicecontrol.ui.pages.diagnostics_page.run_stt_model_compare") as stt_compare,
                 patch("voicecontrol.ui.pages.diagnostics_page.TextSpeaker") as speaker_class,
-                patch("voicecontrol.ui.pages.diagnostics_page.get_default_driver") as get_default_driver,
             ):
                 microphone.return_value = DiagnosticResult(name="microphone", status="ok", details={"rms": 0.25})
                 vad.return_value = DiagnosticResult(name="vad", status="ok", details={"finished": True})
@@ -522,6 +540,16 @@ class SettingsWindowNavigationTests(unittest.TestCase):
                     name="wake_word",
                     status="ok",
                     details={"max_score": 0.8, "detected": True},
+                )
+                executor_send.return_value = DiagnosticResult(
+                    name="executor_send",
+                    status="ok",
+                    details={"target": "cursor", "auto_enter": False},
+                )
+                stt_compare.return_value = DiagnosticResult(
+                    name="stt_model_compare",
+                    status="ok",
+                    details={"models": {"small": {"text": "a"}, "medium": {"text": "b"}}},
                 )
 
                 mic_button.click()
@@ -531,12 +559,22 @@ class SettingsWindowNavigationTests(unittest.TestCase):
                 wake_button.click()
                 tts_button.click()
                 codex_button.click()
+                draft_button.click()
+                stt_compare_button.click()
 
             microphone.assert_called_once_with(diagnostic_path=diagnostic_path)
             vad.assert_called_once_with("sample_vad.wav", diagnostic_path=diagnostic_path)
             wake_word.assert_called_once_with("sample_wake.wav", diagnostic_path=diagnostic_path)
             speaker_class.return_value.speak.assert_called_once()
-            get_default_driver.return_value.send_prompt.assert_called_once()
+            self.assertEqual(executor_send.call_count, 2)
+            self.assertEqual(executor_send.call_args_list[0].kwargs["auto_enter"], True)
+            self.assertEqual(executor_send.call_args_list[1].kwargs["auto_enter"], False)
+            for call in executor_send.call_args_list:
+                self.assertEqual(call.kwargs["config"], window._config)
+                self.assertIsNone(call.kwargs["target"])
+                self.assertEqual(call.kwargs["diagnostic_path"], diagnostic_path)
+            stt_compare.assert_called_once()
+            self.assertEqual(stt_compare.call_args.kwargs["diagnostic_path"], diagnostic_path)
             self.assertIn("ok", mic_result.text())
             self.assertIn("rms", mic_result.text())
             self.assertIn("ok", vad_result.text())
@@ -544,7 +582,10 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             self.assertIn("ok", wake_result.text())
             self.assertIn("max_score", wake_result.text())
             self.assertIn("TTS", tts_result.text())
-            self.assertIn("发送", codex_result.text())
+            self.assertIn("ok", codex_result.text())
+            self.assertIn("auto_enter=False", codex_result.text())
+            self.assertIn("ok", stt_compare_result.text())
+            self.assertIn("models", stt_compare_result.text())
 
     def test_diagnostic_page_shows_failure_result(self) -> None:
         window = SettingsWindow(load_config())

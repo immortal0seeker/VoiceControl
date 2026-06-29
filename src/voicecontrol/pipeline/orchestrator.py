@@ -23,6 +23,7 @@ from voicecontrol.executor.app_driver import AppDriver
 from voicecontrol.executor.router import get_default_driver
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.history.store import CommandHistoryRecord, append_command_history
+from voicecontrol.stt.engine import STTEngine, TranscriptionResult
 from voicecontrol.stt.whisper_engine import WhisperEngine
 from voicecontrol.utils import feedback
 from voicecontrol.utils.hotkeys import ManualStopHotkey
@@ -47,7 +48,7 @@ class VoiceOrchestrator:
 
     def __init__(
         self,
-        engine: WhisperEngine | None = None,
+        engine: STTEngine | None = None,
         driver: AppDriver | None = None,
         send_enabled: bool = True,
         status_publisher: StatusPublisher | None = None,
@@ -260,7 +261,14 @@ class VoiceOrchestrator:
         saved = save_wav(audio, wav_path)
         self._publish_status(StatusType.TRANSCRIBING, data={"wav_path": str(saved)})
         try:
-            text = self.engine.transcribe_file(saved)
+            transcription = self.engine.transcribe_file(saved)
+            if isinstance(transcription, str):
+                transcription = TranscriptionResult(
+                    text=transcription,
+                    engine=settings.STT_PROVIDER,
+                    model=settings.WHISPER_MODEL_SIZE,
+                )
+            text = transcription.text
         except Exception as exc:
             append_command_history(
                 CommandHistoryRecord(
@@ -289,9 +297,14 @@ class VoiceOrchestrator:
         append_command_history(
             CommandHistoryRecord(
                 text=result.text,
+                raw_text=transcription.text,
                 wav_path=result.wav_path,
                 sent=result.sent,
                 send_error=result.send_error,
+                stt_engine=transcription.engine,
+                stt_model=transcription.model,
+                stt_language=transcription.language,
+                stt_language_probability=transcription.language_probability,
             )
         )
         self._publish_status(
@@ -301,6 +314,10 @@ class VoiceOrchestrator:
                 "wav_path": str(result.wav_path),
                 "sent": result.sent,
                 "send_error": result.send_error,
+                "stt_engine": transcription.engine,
+                "stt_model": transcription.model,
+                "stt_language": transcription.language,
+                "stt_language_probability": transcription.language_probability,
             },
         )
         return result

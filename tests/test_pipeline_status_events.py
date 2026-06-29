@@ -9,6 +9,7 @@ import numpy as np
 from voicecontrol.events.status import StatusPublisher, StatusType
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.pipeline.orchestrator import VoiceOrchestrator
+from voicecontrol.stt.engine import TranscriptionResult
 
 
 class PipelineStatusEventTests(unittest.TestCase):
@@ -48,7 +49,13 @@ class PipelineStatusEventTests(unittest.TestCase):
         publisher.subscribe(lambda event: events.append(event.type))
 
         engine = Mock()
-        engine.transcribe_file.return_value = "打开项目"
+        engine.transcribe_file.return_value = TranscriptionResult(
+            text="打开项目",
+            engine="faster_whisper",
+            model="small",
+            language="zh",
+            language_probability=0.93,
+        )
         driver = Mock()
         driver.app_name = "Codex Desktop"
         orchestrator = VoiceOrchestrator(
@@ -72,7 +79,13 @@ class PipelineStatusEventTests(unittest.TestCase):
         publisher.subscribe(lambda event: events.append(event.type))
 
         engine = Mock()
-        engine.transcribe_file.return_value = "打开项目"
+        engine.transcribe_file.return_value = TranscriptionResult(
+            text="打开项目",
+            engine="faster_whisper",
+            model="small",
+            language="zh",
+            language_probability=0.93,
+        )
         driver = Mock()
         driver.app_name = "Codex Desktop"
         driver.send_prompt.side_effect = WindowError("missing window")
