@@ -21,7 +21,7 @@ MOJIBAKE_MARKERS = [
 ]
 
 SCANNED_SUFFIXES = {".py", ".md", ".json", ".toml", ".txt"}
-SKIPPED_DIRS = {".git", ".venv", "__pycache__", "audio_files", "logs"}
+SKIPPED_DIRS = {".git", ".venv", ".sensevoice_spike_venv", "__pycache__", "audio_files", "logs"}
 
 
 class NoMojibakeTests(unittest.TestCase):

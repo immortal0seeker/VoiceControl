@@ -69,6 +69,9 @@ WHISPER_CONDITION_ON_PREVIOUS_TEXT: bool = False
 # CPU fallback values, applied when CUDA is unavailable.
 WHISPER_CPU_DEVICE: str = "cpu"
 WHISPER_CPU_COMPUTE_TYPE: str = "int8"
+SENSEVOICE_MODEL: str = "SenseVoiceSmall"
+SENSEVOICE_DEVICE: str = "cpu"
+SENSEVOICE_LANGUAGE: str = "zh"
 
 # --- Executor / desktop automation -----------------------------------------
 # Substring (case-insensitive) used to locate the target app window.
@@ -196,6 +199,9 @@ WHISPER_LANGUAGE = _STT_CONFIG["whisper_language"]
 WHISPER_BEAM_SIZE = _STT_CONFIG["whisper_beam_size"]
 WHISPER_VAD_FILTER = _STT_CONFIG["whisper_vad_filter"]
 WHISPER_CONDITION_ON_PREVIOUS_TEXT = _STT_CONFIG["whisper_condition_on_previous_text"]
+SENSEVOICE_MODEL = _STT_CONFIG["sensevoice_model"]
+SENSEVOICE_DEVICE = _STT_CONFIG["sensevoice_device"]
+SENSEVOICE_LANGUAGE = _STT_CONFIG["sensevoice_language"]
 
 _EXECUTOR_CONFIG = _USER_CONFIG["executor"]
 DEFAULT_EXECUTOR_TARGET = _EXECUTOR_CONFIG["default_target"]

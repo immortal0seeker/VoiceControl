@@ -1,13 +1,18 @@
-"""Compare local Whisper STT models on the same existing audio file."""
+"""Compare local STT models on the same existing audio file."""
 
 from __future__ import annotations
 
+from copy import deepcopy
 import time
 from pathlib import Path
 
 from voicecontrol.config import settings
+from voicecontrol.config.manager import DEFAULT_CONFIG
 from voicecontrol.diagnostics.store import DiagnosticResult, append_diagnostic_result
-from voicecontrol.stt.whisper_engine import WhisperEngine
+from voicecontrol.stt.factory import create_stt_engine
+
+
+DEFAULT_COMPARE_MODELS: tuple[str, ...] = ("small", "medium", "sensevoice_small")
 
 
 def latest_recording_path(recordings_dir: str | Path | None = None) -> Path | None:
@@ -24,7 +29,7 @@ def latest_recording_path(recordings_dir: str | Path | None = None) -> Path | No
 def run_stt_model_compare(
     audio_path: str | Path | None = None,
     *,
-    models: tuple[str, ...] = ("small", "medium"),
+    models: tuple[str, ...] = DEFAULT_COMPARE_MODELS,
     diagnostic_path: str | Path | None = None,
 ) -> DiagnosticResult:
     """Transcribe one local audio file with each model and record the comparison."""
@@ -54,12 +59,15 @@ def run_stt_model_compare(
     for model in models:
         started_at = time.perf_counter()
         try:
-            transcription = WhisperEngine(model_size=model).transcribe_file(selected_audio_path)
+            engine = create_stt_engine(_config_for_compare_model(model))
+            transcription = engine.transcribe_file(selected_audio_path)
             elapsed = transcription.duration_seconds
             if elapsed is None:
                 elapsed = time.perf_counter() - started_at
             model_details[model] = {
                 "text": transcription.text,
+                "engine": transcription.engine,
+                "model": transcription.model,
                 "duration_seconds": round(elapsed, 3),
                 "language": transcription.language,
                 "language_probability": transcription.language_probability,
@@ -80,3 +88,26 @@ def run_stt_model_compare(
     )
     append_diagnostic_result(result, path=diagnostic_path)
     return result
+
+
+def _config_for_compare_model(model: str) -> dict[str, object]:
+    config = deepcopy(DEFAULT_CONFIG)
+    stt_config = config["stt"]
+    if model in {"small", "medium"}:
+        stt_config["provider"] = "faster_whisper"
+        stt_config["whisper_model_size"] = model
+        stt_config["whisper_model_profile"] = (
+            "balanced_small" if model == "small" else "accuracy_medium"
+        )
+        return config
+
+    if model == "sensevoice_small":
+        stt_config["provider"] = "funasr_sensevoice"
+        stt_config["sensevoice_model"] = "SenseVoiceSmall"
+        stt_config["sensevoice_device"] = settings.SENSEVOICE_DEVICE
+        stt_config["sensevoice_language"] = settings.SENSEVOICE_LANGUAGE
+        return config
+
+    raise ValueError(
+        f"Unknown STT compare model {model!r}; expected small, medium, or sensevoice_small"
+    )

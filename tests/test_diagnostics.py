@@ -144,12 +144,19 @@ class DiagnosticsTests(unittest.TestCase):
             audio_path.write_bytes(b"wav")
             diagnostic_path = Path(temp_dir) / "diagnostics.jsonl"
 
-            def make_engine(*, model_size: str):
+            def make_engine(config: dict):
+                stt_config = config["stt"]
+                if stt_config["provider"] == "funasr_sensevoice":
+                    model_name = "sensevoice_small"
+                    engine_name = "funasr_sensevoice"
+                else:
+                    model_name = stt_config["whisper_model_size"]
+                    engine_name = "faster_whisper"
                 engine = Mock()
                 engine.transcribe_file.return_value = TranscriptionResult(
-                    text=f"{model_size} text",
-                    engine="faster_whisper",
-                    model=model_size,
+                    text=f"{model_name} text",
+                    engine=engine_name,
+                    model=model_name,
                     language="zh",
                     language_probability=0.9,
                     duration_seconds=0.12,
@@ -157,25 +164,78 @@ class DiagnosticsTests(unittest.TestCase):
                 return engine
 
             with patch(
-                "voicecontrol.diagnostics.stt_model_compare.WhisperEngine",
+                "voicecontrol.diagnostics.stt_model_compare.create_stt_engine",
                 side_effect=make_engine,
-            ) as whisper_engine:
+            ) as create_engine:
                 result = run_stt_model_compare(
                     audio_path,
-                    models=("small", "medium"),
                     diagnostic_path=diagnostic_path,
                 )
             saved = json.loads(diagnostic_path.read_text(encoding="utf-8"))
 
+        provider_calls = [call.args[0]["stt"]["provider"] for call in create_engine.call_args_list]
+        whisper_sizes = [
+            call.args[0]["stt"].get("whisper_model_size")
+            for call in create_engine.call_args_list
+            if call.args[0]["stt"]["provider"] == "faster_whisper"
+        ]
         self.assertEqual(
-            [call.kwargs["model_size"] for call in whisper_engine.call_args_list],
-            ["small", "medium"],
+            provider_calls,
+            ["faster_whisper", "faster_whisper", "funasr_sensevoice"],
         )
+        self.assertEqual(whisper_sizes, ["small", "medium"])
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.details["audio_path"], str(audio_path))
         self.assertEqual(result.details["models"]["small"]["text"], "small text")
         self.assertEqual(result.details["models"]["medium"]["text"], "medium text")
+        self.assertEqual(
+            result.details["models"]["sensevoice_small"]["text"],
+            "sensevoice_small text",
+        )
         self.assertEqual(saved["name"], "stt_model_compare")
+
+    def test_run_stt_model_compare_keeps_whisper_results_when_sensevoice_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "command.wav"
+            audio_path.write_bytes(b"wav")
+            diagnostic_path = Path(temp_dir) / "diagnostics.jsonl"
+
+            def make_engine(config: dict):
+                stt_config = config["stt"]
+                engine = Mock()
+                if stt_config["provider"] == "funasr_sensevoice":
+                    engine.transcribe_file.side_effect = RuntimeError(
+                        "SenseVoice runtime is not installed or incomplete"
+                    )
+                    return engine
+
+                model_size = stt_config["whisper_model_size"]
+                engine.transcribe_file.return_value = TranscriptionResult(
+                    text=f"{model_size} text",
+                    engine="faster_whisper",
+                    model=model_size,
+                    language="zh",
+                    duration_seconds=0.1,
+                )
+                return engine
+
+            with patch(
+                "voicecontrol.diagnostics.stt_model_compare.create_stt_engine",
+                side_effect=make_engine,
+            ):
+                result = run_stt_model_compare(
+                    audio_path,
+                    diagnostic_path=diagnostic_path,
+                )
+
+        self.assertEqual(result.status, "error")
+        self.assertIn("SenseVoice runtime is not installed", result.error)
+        self.assertEqual(result.details["models"]["small"]["text"], "small text")
+        self.assertEqual(result.details["models"]["medium"]["text"], "medium text")
+        self.assertIn(
+            "SenseVoice runtime is not installed",
+            result.details["models"]["sensevoice_small"]["error"],
+        )
 
 
 if __name__ == "__main__":

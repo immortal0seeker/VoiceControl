@@ -6,11 +6,11 @@
 
 # VoiceControl
 
-VoiceControl is a local voice-driven desktop assistant for Windows 11. After a wake word, it records your command, transcribes it with Whisper, and sends it to the configured target app.
+VoiceControl is a local voice-driven desktop assistant for Windows 11. After a wake word, it records your command, transcribes it with local STT, and sends it to the configured target app.
 
 ```text
 hey jarvis / world_activate -> beep or TTS "I'm here"
--> speak command -> VAD auto-stop -> Whisper transcription
+-> speak command -> VAD auto-stop -> STT transcription
 -> send to Codex / ChatGPT / Cursor / Trae
 ```
 
@@ -36,6 +36,8 @@ python -m venv .venv
 `pip install -e .` registers the `voicecontrol` package so `python -m voicecontrol.*` works from any directory.
 
 The first Whisper / openWakeWord run may need to download models. The custom wake word model `world_activate.onnx` is bundled.
+
+STT defaults to `faster_whisper` + Whisper `small`. The settings UI also offers Whisper `medium` and SenseVoice-Small; SenseVoice-Small requires the FunASR runtime, which is not bundled in the default install yet.
 
 ## Usage
 
@@ -127,9 +129,10 @@ The current config includes AppsFolder launch commands:
 
 Notes:
 
-- Codex Desktop, ChatGPT Desktop, and Cursor have been live-tested for successful prompt sending.
-- Trae has initial driver and router support, and uses its own configurable composer click coordinates, but its live send loop is still pending verification.
-- ChatGPT Desktop and Cursor use `Ctrl+Shift+L` to focus the composer; Codex and Trae currently use relative composer click coordinates.
+- Codex Desktop, ChatGPT Desktop, Cursor, and Trae have been live-tested for opening, focusing/injecting text, and sending prompts.
+- ChatGPT Desktop and Cursor use `Ctrl+Shift+L` to focus the composer.
+- Trae uses a bottom neutral click to clear stale AI-sidebar focus, then `Ctrl+U` to focus the AI input, then paste/Enter. It does not click again after `Ctrl+U`.
+- Codex still uses relative composer click coordinates.
 - If a target window is missing and its launch command is configured, the driver tries to start the app and waits for a matching window.
 
 ## Diagnostics
@@ -140,7 +143,7 @@ Notes:
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
 
-The control center also provides microphone, VAD, wake-word, TTS, default-target send tests, and log viewing.
+The control center also provides microphone, VAD, wake-word, STT model comparison, TTS, default-target send tests, and log viewing. STT comparison runs Whisper `small`, Whisper `medium`, and SenseVoice-Small; if the SenseVoice runtime is missing, it shows a per-model error while preserving Whisper results.
 
 ## Common Configuration
 
@@ -154,7 +157,9 @@ The control center also provides microphone, VAD, wake-word, TTS, default-target
 | `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT window-title match |
 | `executor.cursor_window_title` | `Cursor` | Cursor window-title match |
 | `executor.trae_window_title` | `Trae` | Trae window-title match |
-| `stt.whisper_model_size` | `small` | Upgrade path: `medium` / `large-v3` |
+| `stt.provider` | `faster_whisper` | STT provider: `faster_whisper` / `funasr_sensevoice` |
+| `stt.whisper_model_size` | `small` | Whisper model tier: `small` / `medium` |
+| `stt.sensevoice_model` | `SenseVoiceSmall` | SenseVoice-Small config; requires extra FunASR runtime |
 | `tts.enabled` | `true` | Windows SAPI short status phrases |
 | `hotkeys.record_hotkey` | `f9` | Recording hotkey |
 
@@ -197,10 +202,11 @@ logs/
 
 Shipped:
 
-- Microphone capture and faster-whisper transcription
+- Microphone capture and STT transcription, defaulting to faster-whisper
+- STT provider factory, Whisper small/medium, SenseVoice-Small engine, and model comparison diagnostics
 - F9 hotkey recording and VAD auto-stop
 - openWakeWord wake-word loop and tray daemon
-- Codex / ChatGPT / Cursor / Trae desktop drivers (Trae live send verification pending)
+- Codex / ChatGPT / Cursor / Trae desktop drivers, with all four live send loops verified
 - Default target-app routing
 - AppsFolder launch-command config
 - PySide6 control center
@@ -215,6 +221,7 @@ Planned:
 - Small desktop task abilities
 - Custom desktop-pet avatars
 - Packaging and startup experience
+- Formal SenseVoice/FunASR dependency installation and release path
 - Stability and diagnostics improvements
 - Smarter voice routing
 - CLI agent driver

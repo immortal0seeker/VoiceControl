@@ -210,7 +210,7 @@ class DiagnosticsPage(QWidget):
 
     def _add_stt_card(self, root_layout: QVBoxLayout) -> None:
         frame, layout = card("STT 模型对比")
-        run_button = QPushButton("用最近录音比较 small / medium")
+        run_button = QPushButton("用最近录音比较 small / medium / SenseVoice-Small")
         run_button.setObjectName("runSttModelCompareButton")
         self._stt_compare_run_button = run_button
         self._stt_compare_result_label = _make_selectable(QLabel("尚未运行。"))

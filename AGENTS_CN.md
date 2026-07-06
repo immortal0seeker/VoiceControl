@@ -39,9 +39,9 @@ pip install -e .
 
 | 主题 | 决策 |
 | --- | --- |
-| STT 引擎 | `faster-whisper` |
+| STT 引擎 | 通过 `create_stt_engine()` provider factory 选择；默认 `faster_whisper`，可选 `funasr_sensevoice` |
 | 语言 | 中文为主 + 英文，使用多语言模型 |
-| 默认 STT 模型 | `small`；升级路径：`medium` -> `large-v3` |
+| 默认 STT 模型 | Whisper `small`；可选 Whisper `medium`、SenseVoice-Small |
 | 计算 | GPU 优先：`cuda` / `float16`；CPU 兜底：`int8` |
 | 用户配置 | 根目录 `config.json` 覆盖代码默认值；`config/manager.py` 合并；`settings.py` 导出 |
 | Executor 目标 | Codex Desktop、ChatGPT Desktop、Cursor、Trae |
@@ -65,14 +65,14 @@ VAD 自动停录            热键循环加 --vad
 Codex driver            聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
 ChatGPT driver          聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
 Cursor driver           聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
-Trae driver             聚焦 -> 点击配置的输入框坐标 -> 粘贴 -> Enter；支持自动启动；尚待真实发送验证
+Trae driver             聚焦 -> 底部中性区域点击 -> Ctrl+U -> 粘贴 -> Enter；支持自动启动
 控制中心                python -m voicecontrol.ui.settings_app
 桌宠                    pythonw -m voicecontrol.ui.desktop_pet_app
 开机自启                托盘菜单切换
 TTS 状态提示            按流水线事件播报短句
 Runtime 状态            logs/runtime/runtime_status.json
 命令历史                logs/history/command_history.jsonl
-诊断                    麦克风 / VAD / 唤醒词 / TTS / 默认目标发送测试
+诊断                    麦克风 / VAD / 唤醒词 / STT 模型对比 / TTS / 默认目标发送测试
 手动录音                托盘或设置页写入控制命令，跳过唤醒词
 自定义唤醒词            bundled world_activate.onnx
 ```
@@ -117,7 +117,7 @@ VoiceControl/
     ├── main.py
     ├── tray_app.py
     ├── audio/
-    ├── stt/
+    ├── stt/                 STTEngine 协议、WhisperEngine、SenseVoiceEngine、provider factory
     ├── vad/
     ├── wake_word/
     ├── executor/
@@ -164,6 +164,8 @@ VoiceControl/
 SAMPLE_RATE = 16000
 CHANNELS = 1
 WHISPER_MODEL_SIZE = "small"
+STT_PROVIDER = "faster_whisper"  # faster_whisper | funasr_sensevoice
+SENSEVOICE_MODEL = "SenseVoiceSmall"
 WHISPER_DEVICE = "cuda"
 WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
@@ -177,7 +179,9 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。Codex Desktop、ChatGPT Desktop、Cursor 已经实测可以成功发送消息；Trae 已有 driver 和路由支持，但真实发送闭环尚待验证。
+`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。Codex Desktop、ChatGPT Desktop、Cursor、Trae 均已实测完成打开、聚焦/注入文本和发送闭环。
+
+STT 默认仍保持 `faster_whisper` + Whisper `small`。SenseVoice-Small 已通过 `stt.provider = "funasr_sensevoice"` 和设置 UI 接入，但 FunASR 运行时暂未加入默认安装依赖；缺少 SenseVoice 依赖时，诊断应给出清晰的单模型错误，同时保留 Whisper 对比结果。
 
 ---
 
@@ -203,7 +207,9 @@ class LaunchableAppDriver(AppDriver):
 - 默认目标通过 `voicecontrol.executor.router.get_default_driver()` 获取。
 - 显式目标通过 `create_driver("codex" | "chatgpt" | "cursor" | "trae")` 创建。
 - 优先用剪贴板粘贴，而不是逐字输入。
-- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区；Codex 和 Trae 仍使用相对输入框点击坐标。
+- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
+- Trae 先点击底部中性区域让 AI 侧栏失焦，再用 `Ctrl+U` 聚焦 AI 输入框；`Ctrl+U` 后不要再点击输入框。
+- Codex 仍使用相对输入框点击坐标。
 - 桌面操作前后保留短延迟和清晰日志。
 - 注意焦点丢失、输入法、管理员权限边界、编辑器热键截获。
 
@@ -258,6 +264,7 @@ CLI agent driver
 首次运行自动发现应用
 真正 Windows Service
 transcribe_array
+默认安装中捆绑 FunASR/SenseVoice 运行时
 ```
 
 ---

@@ -38,6 +38,17 @@ class CheckedInConfigTests(unittest.TestCase):
         self.assertEqual(settings.STT_PROVIDER, "faster_whisper")
         self.assertIn(settings.WHISPER_MODEL_PROFILE, {"balanced_small", "accuracy_medium"})
 
+    def test_checked_in_config_has_dormant_sensevoice_defaults(self) -> None:
+        config = load_config(CONFIG_PATH)
+
+        self.assertEqual(config["stt"]["provider"], "faster_whisper")
+        self.assertEqual(config["stt"]["sensevoice_model"], "SenseVoiceSmall")
+        self.assertEqual(config["stt"]["sensevoice_device"], "cpu")
+        self.assertEqual(config["stt"]["sensevoice_language"], "zh")
+        self.assertEqual(settings.SENSEVOICE_MODEL, "SenseVoiceSmall")
+        self.assertEqual(settings.SENSEVOICE_DEVICE, "cpu")
+        self.assertEqual(settings.SENSEVOICE_LANGUAGE, "zh")
+
     def test_stt_model_profiles_resolve_to_whisper_model_sizes(self) -> None:
         self.assertEqual(settings.resolve_whisper_model_profile("balanced_small"), "small")
         self.assertEqual(settings.resolve_whisper_model_profile("accuracy_medium"), "medium")

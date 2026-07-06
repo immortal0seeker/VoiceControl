@@ -1,5 +1,6 @@
 # Virtual environment
 .venv/
+.sensevoice_spike_venv/
 venv/
 env/
 

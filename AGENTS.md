@@ -37,9 +37,9 @@ The editable install registers the `voicecontrol` package so `python -m voicecon
 
 | Topic | Decision |
 | --- | --- |
-| STT engine | `faster-whisper` |
+| STT engine | Provider factory via `create_stt_engine()`; default `faster_whisper`, optional `funasr_sensevoice` |
 | Languages | Chinese-primary + English, using a multilingual model |
-| Default STT model | `small`; upgrade path: `medium` -> `large-v3` |
+| Default STT model | Whisper `small`; optional choices: Whisper `medium`, SenseVoice-Small |
 | Compute | GPU first: `device="cuda"`, `compute_type="float16"`; CPU fallback: `int8` |
 | User config | Root `config.json` merged over defaults via `config/manager.py`; `settings.py` exports merged values |
 | Executor targets | Codex Desktop, ChatGPT Desktop, Cursor, Trae |
@@ -63,14 +63,14 @@ Executor routing            codex / chatgpt / cursor / trae selected by executor
 Codex driver                focus -> click composer -> paste -> Enter; optional auto-launch
 ChatGPT driver              focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
 Cursor driver               focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
-Trae driver                 focus -> click configured composer coordinate -> paste -> Enter; optional auto-launch; pending live send verification
+Trae driver                 focus -> bottom neutral click -> Ctrl+U -> paste -> Enter; optional auto-launch
 Control center              python -m voicecontrol.ui.settings_app
 Desktop pet                 pythonw -m voicecontrol.ui.desktop_pet_app
 Launch at logon             tray menu toggle
 TTS status cues             short pipeline event phrases
 Runtime status              logs/runtime/runtime_status.json
 Command history             logs/history/command_history.jsonl
-Diagnostics                 mic / VAD / wake-word / TTS / target-send tests
+Diagnostics                 mic / VAD / wake-word / STT model compare / TTS / target-send tests
 Manual recording            tray/settings control command, bypassing wake word
 Custom wake word            bundled world_activate.onnx
 ```
@@ -117,7 +117,7 @@ VoiceControl/
     ├── main.py
     ├── tray_app.py
     ├── audio/
-    ├── stt/
+    ├── stt/                 STTEngine protocol, WhisperEngine, SenseVoiceEngine, provider factory
     ├── vad/
     ├── wake_word/
     ├── executor/
@@ -164,6 +164,8 @@ Runtime values come from merged `config.json`. After editing config, restart tra
 SAMPLE_RATE = 16000
 CHANNELS = 1
 WHISPER_MODEL_SIZE = "small"
+STT_PROVIDER = "faster_whisper"  # faster_whisper | funasr_sensevoice
+SENSEVOICE_MODEL = "SenseVoiceSmall"
 WHISPER_DEVICE = "cuda"
 WHISPER_COMPUTE_TYPE = "float16"
 VAD_SILENCE_DURATION = 3.0
@@ -177,7 +179,9 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Codex Desktop, ChatGPT Desktop, and Cursor have been live-tested for successful prompt sending. Trae is routable and has a driver, but live send verification is still pending.
+`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Codex Desktop, ChatGPT Desktop, Cursor, and Trae have all been live-tested for opening, focusing/injecting text, and sending prompts.
+
+STT defaults remain on `faster_whisper` + Whisper `small`. SenseVoice-Small support exists behind `stt.provider = "funasr_sensevoice"` and the settings UI, but the FunASR runtime is not part of the default project install yet. Missing SenseVoice dependencies should fail clearly in diagnostics instead of breaking Whisper comparison results.
 
 ---
 
@@ -203,7 +207,9 @@ Rules:
 - Route default target selection through `voicecontrol.executor.router.get_default_driver()`.
 - Use `create_driver("codex" | "chatgpt" | "cursor" | "trae")` for explicit target creation.
 - Prefer clipboard paste over character typing for Chinese and long prompts.
-- ChatGPT Desktop and Cursor focus their composer with `Ctrl+Shift+L`; Codex and Trae still use relative composer click coordinates.
+- ChatGPT Desktop and Cursor focus their composer with `Ctrl+Shift+L`.
+- Trae first clicks the bottom neutral area to remove stale AI-sidebar focus, then uses `Ctrl+U` to focus the AI input. Do not click again after `Ctrl+U`.
+- Codex still uses relative composer click coordinates.
 - Keep desktop actions logged and delayed slightly.
 - Be careful with focus loss, IME state, admin boundaries, and editor hotkeys.
 
@@ -258,6 +264,7 @@ Packaged installer
 Automatic first-run app discovery
 True Windows Service
 transcribe_array
+Bundling FunASR/SenseVoice runtime in default install
 ```
 
 ---

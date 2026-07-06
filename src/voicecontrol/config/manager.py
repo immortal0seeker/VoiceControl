@@ -29,6 +29,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "whisper_beam_size": 5,
         "whisper_vad_filter": True,
         "whisper_condition_on_previous_text": False,
+        "sensevoice_model": "SenseVoiceSmall",
+        "sensevoice_device": "cpu",
+        "sensevoice_language": "zh",
     },
     "vad": {
         "speech_threshold": 0.5,

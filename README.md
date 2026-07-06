@@ -6,11 +6,11 @@
 
 # VoiceControl
 
-VoiceControl 是 Windows 11 本地语音桌面助手：说出唤醒词后录音，使用 Whisper 转写，再把命令发送到配置的目标应用。
+VoiceControl 是 Windows 11 本地语音桌面助手：说出唤醒词后录音，使用本地 STT 转写，再把命令发送到配置的目标应用。
 
 ```text
 hey jarvis / world_activate -> 蜂鸣或 TTS「我在」
--> 说命令 -> VAD 自动停录 -> Whisper 转写
+-> 说命令 -> VAD 自动停录 -> STT 转写
 -> 发送到 Codex / ChatGPT / Cursor / Trae
 ```
 
@@ -36,6 +36,8 @@ python -m venv .venv
 `pip install -e .` 会注册 `voicecontrol` 包，之后可以使用 `python -m voicecontrol.*`。
 
 首次使用 Whisper / openWakeWord 时可能需要下载模型。项目已内置自定义唤醒词模型 `world_activate.onnx`。
+
+STT 默认使用 `faster_whisper` + Whisper `small`。设置页也提供 Whisper `medium` 和 SenseVoice-Small 选项；SenseVoice-Small 需要额外安装 FunASR 运行时，默认安装暂不捆绑。
 
 ## 运行
 
@@ -127,9 +129,10 @@ trae
 
 说明：
 
-- Codex Desktop、ChatGPT Desktop、Cursor 已经实测可以成功发送消息。
-- Trae 已有初版 driver 和路由支持，并使用独立的输入框点击坐标，但真实发送闭环尚待验证。
-- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区；Codex 和 Trae 暂时使用相对位置点击输入框。
+- Codex Desktop、ChatGPT Desktop、Cursor、Trae 已经实测可以成功打开、聚焦/注入文本并发送消息。
+- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
+- Trae 使用“底部中性区域点击失焦 -> `Ctrl+U` 聚焦 AI 输入框 -> 粘贴/回车”的策略；`Ctrl+U` 后不会再点击输入框。
+- Codex 当前仍使用相对位置点击输入框。
 - 如果窗口不存在且启动命令不为空，driver 会尝试启动应用并等待窗口出现。
 
 ## 诊断
@@ -140,7 +143,7 @@ trae
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
 ```
 
-控制中心也提供麦克风、VAD、唤醒词、TTS、默认目标发送测试和日志查看。
+控制中心也提供麦克风、VAD、唤醒词、STT 模型对比、TTS、默认目标发送测试和日志查看。STT 对比会比较 Whisper `small`、Whisper `medium` 和 SenseVoice-Small；如果 SenseVoice 运行时未安装，会显示单模型错误并保留 Whisper 结果。
 
 ## 常用配置
 
@@ -153,7 +156,9 @@ trae
 | `executor.codex_window_title` | `Codex` | Codex 窗口标题匹配 |
 | `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT 窗口标题匹配 |
 | `executor.cursor_window_title` | `Cursor` | Cursor 窗口标题匹配 |
-| `stt.whisper_model_size` | `small` | 可升级为 `medium` / `large-v3` |
+| `stt.provider` | `faster_whisper` | STT provider，可选 `faster_whisper` / `funasr_sensevoice` |
+| `stt.whisper_model_size` | `small` | Whisper 档位，可选 `small` / `medium` |
+| `stt.sensevoice_model` | `SenseVoiceSmall` | SenseVoice-Small 配置；需要额外 FunASR 运行时 |
 | `tts.enabled` | `true` | Windows SAPI 状态短句播报 |
 | `hotkeys.record_hotkey` | `f9` | 录音热键 |
 
@@ -196,10 +201,11 @@ logs/
 
 已实现：
 
-- 麦克风录音与 faster-whisper 转写
+- 麦克风录音与 STT 转写，默认 faster-whisper
+- STT provider factory、Whisper small/medium、SenseVoice-Small engine 与诊断对比
 - F9 热键录音与 VAD 自动停录
 - openWakeWord 唤醒词和托盘后台
-- Codex / ChatGPT / Cursor / Trae 桌面 driver（Trae 待实测发送闭环）
+- Codex / ChatGPT / Cursor / Trae 桌面 driver，四目标发送闭环已实测
 - 默认目标应用路由
 - AppsFolder 启动命令配置
 - PySide6 控制中心
@@ -214,6 +220,7 @@ logs/
 - 桌面小任务能力
 - 桌宠自定义形象
 - 打包启动体验
+- SenseVoice/FunASR 正式依赖安装与发布路径
 - 稳定性/诊断增强
 - 更智能的语音路由
 - CLI agent driver

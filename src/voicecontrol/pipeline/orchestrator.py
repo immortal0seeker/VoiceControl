@@ -24,7 +24,7 @@ from voicecontrol.executor.router import get_default_driver
 from voicecontrol.executor.window_utils import WindowError
 from voicecontrol.history.store import CommandHistoryRecord, append_command_history
 from voicecontrol.stt.engine import STTEngine, TranscriptionResult
-from voicecontrol.stt.whisper_engine import WhisperEngine
+from voicecontrol.stt.factory import create_stt_engine
 from voicecontrol.utils import feedback
 from voicecontrol.utils.hotkeys import ManualStopHotkey
 from voicecontrol.vad.silero_vad import EndpointDetector
@@ -53,7 +53,7 @@ class VoiceOrchestrator:
         send_enabled: bool = True,
         status_publisher: StatusPublisher | None = None,
     ) -> None:
-        self.engine = engine or WhisperEngine()
+        self.engine = engine or create_stt_engine()
         self.driver = driver or get_default_driver()
         self.send_enabled = send_enabled
         self.status_publisher = status_publisher or default_status_publisher

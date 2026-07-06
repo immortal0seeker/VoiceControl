@@ -128,11 +128,17 @@ class SettingsPage(QWidget):
 
     def _add_stt_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Speech Recognition")
-        current_profile = get_nested(self._config, ("stt", "whisper_model_profile"))
+        current_provider = get_nested(self._config, ("stt", "provider"))
+        current_profile = (
+            "sensevoice_small"
+            if current_provider == "funasr_sensevoice"
+            else get_nested(self._config, ("stt", "whisper_model_profile"))
+        )
         whisper_profile = QComboBox()
         whisper_profile.setObjectName("sttWhisperModelProfile")
         whisper_profile.addItem("Whisper small - balanced", "balanced_small")
         whisper_profile.addItem("Whisper medium - accuracy", "accuracy_medium")
+        whisper_profile.addItem("SenseVoice-Small - Chinese-first", "sensevoice_small")
         profile_index = whisper_profile.findData(current_profile)
         if profile_index >= 0:
             whisper_profile.setCurrentIndex(profile_index)
@@ -147,17 +153,42 @@ class SettingsPage(QWidget):
         whisper_beam = int_spin(get_nested(self._config, ("stt", "whisper_beam_size")), 1, 10)
         whisper_vad = switch(get_nested(self._config, ("stt", "whisper_vad_filter")))
 
-        add_row(layout, "Whisper 模型档位", whisper_profile, "small 更快，medium 更准但更吃显存。")
+        add_row(layout, "STT 模型", whisper_profile, "Whisper small/medium 和 SenseVoice-Small 可切换。")
         add_row(layout, "计算设备", whisper_device, "有 NVIDIA CUDA 时用 cuda；否则用 cpu。")
         add_row(layout, "计算精度", whisper_compute, "GPU 常用 float16，CPU 常用 int8。")
         add_row(layout, "Beam Size", whisper_beam, "越大可能更准，但速度更慢。")
         add_row(layout, "Whisper VAD 过滤", whisper_vad, "过滤静音和噪声，减少幻觉文本。")
 
-        register(self._bindings, ("stt", "whisper_model_profile"), whisper_profile.currentData)
+        def selected_stt_choice() -> str:
+            return str(whisper_profile.currentData())
+
+        def selected_stt_provider() -> str:
+            if selected_stt_choice() == "sensevoice_small":
+                return "funasr_sensevoice"
+            return "faster_whisper"
+
+        def selected_whisper_profile() -> str:
+            choice = selected_stt_choice()
+            if choice != "sensevoice_small":
+                return choice
+            existing_profile = get_nested(self._config, ("stt", "whisper_model_profile"))
+            if existing_profile in settings.WHISPER_MODEL_PROFILES:
+                return existing_profile
+            return settings.WHISPER_MODEL_PROFILE
+
+        register(self._bindings, ("stt", "provider"), selected_stt_provider)
+        register(self._bindings, ("stt", "whisper_model_profile"), selected_whisper_profile)
         register(
             self._bindings,
             ("stt", "whisper_model_size"),
-            lambda: settings.resolve_whisper_model_profile(str(whisper_profile.currentData())),
+            lambda: settings.resolve_whisper_model_profile(selected_whisper_profile()),
+        )
+        register(
+            self._bindings,
+            ("stt", "sensevoice_model"),
+            lambda: "SenseVoiceSmall"
+            if selected_stt_choice() == "sensevoice_small"
+            else get_nested(self._config, ("stt", "sensevoice_model")),
         )
         register(self._bindings, ("stt", "whisper_device"), whisper_device.currentText)
         register(self._bindings, ("stt", "whisper_compute_type"), whisper_compute.currentText)

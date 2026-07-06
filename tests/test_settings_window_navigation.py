@@ -189,6 +189,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
     def test_settings_page_binds_stt_model_profile_to_model_size(self) -> None:
         config = load_config()
+        config["stt"]["provider"] = "faster_whisper"
         config["stt"]["whisper_model_profile"] = "balanced_small"
         config["stt"]["whisper_model_size"] = "small"
         window = SettingsWindow(config)
@@ -199,7 +200,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         self.assertEqual(profile.currentData(), "balanced_small")
         self.assertEqual(
             [profile.itemData(index) for index in range(profile.count())],
-            ["balanced_small", "accuracy_medium"],
+            ["balanced_small", "accuracy_medium", "sensevoice_small"],
         )
 
         profile.setCurrentIndex(1)
@@ -211,6 +212,45 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
         self.assertEqual(next_config["stt"]["whisper_model_profile"], "accuracy_medium")
         self.assertEqual(next_config["stt"]["whisper_model_size"], "medium")
+        self.assertEqual(next_config["stt"]["provider"], "faster_whisper")
+
+    def test_settings_page_saves_sensevoice_stt_provider(self) -> None:
+        config = load_config()
+        config["stt"]["provider"] = "faster_whisper"
+        config["stt"]["whisper_model_profile"] = "balanced_small"
+        config["stt"]["whisper_model_size"] = "small"
+        config["stt"]["sensevoice_model"] = "SenseVoiceSmall"
+        window = SettingsWindow(config)
+
+        profile = window.findChild(QComboBox, "sttWhisperModelProfile")
+        self.assertIsNotNone(profile)
+        sensevoice_index = profile.findData("sensevoice_small")
+        self.assertGreaterEqual(sensevoice_index, 0)
+
+        profile.setCurrentIndex(sensevoice_index)
+        next_config = load_config()
+        settings_page = window.findChild(QWidget, "settingsPage")
+        self.assertIsNotNone(settings_page)
+        for path, reader in settings_page._bindings:
+            set_nested(next_config, path, reader())
+
+        self.assertEqual(next_config["stt"]["provider"], "funasr_sensevoice")
+        self.assertEqual(next_config["stt"]["sensevoice_model"], "SenseVoiceSmall")
+        self.assertEqual(next_config["stt"]["whisper_model_profile"], "balanced_small")
+        self.assertEqual(next_config["stt"]["whisper_model_size"], "small")
+
+    def test_settings_page_loads_sensevoice_selection_from_provider(self) -> None:
+        config = load_config()
+        config["stt"]["provider"] = "funasr_sensevoice"
+        config["stt"]["whisper_model_profile"] = "balanced_small"
+        config["stt"]["whisper_model_size"] = "small"
+        config["stt"]["sensevoice_model"] = "SenseVoiceSmall"
+        window = SettingsWindow(config)
+
+        profile = window.findChild(QComboBox, "sttWhisperModelProfile")
+
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.currentData(), "sensevoice_small")
 
     def test_settings_page_exposes_desktop_pet_controls(self) -> None:
         window = SettingsWindow(load_config())

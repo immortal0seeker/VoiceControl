@@ -11,7 +11,10 @@
     "whisper_language": null,
     "whisper_beam_size": 5,
     "whisper_vad_filter": true,
-    "whisper_condition_on_previous_text": false
+    "whisper_condition_on_previous_text": false,
+    "sensevoice_model": "SenseVoiceSmall",
+    "sensevoice_device": "cpu",
+    "sensevoice_language": "zh"
   },
   "vad": {
     "speech_threshold": 0.5,
