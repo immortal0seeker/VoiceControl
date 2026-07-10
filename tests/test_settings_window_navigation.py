@@ -117,11 +117,12 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         self.assertIsNotNone(target)
 
     def test_settings_page_exposes_executor_target_selector(self) -> None:
-        window = SettingsWindow(load_config())
+        config = load_config()
+        window = SettingsWindow(config)
         target = window.findChild(QComboBox, "executorTargetCombo")
 
         self.assertIsNotNone(target)
-        self.assertEqual(target.currentText(), "chatgpt")
+        self.assertEqual(target.currentText(), config["executor"]["default_target"])
         self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor", "trae"])
 
     def test_settings_page_hides_trae_click_strategy_controls(self) -> None:

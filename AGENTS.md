@@ -70,7 +70,7 @@ Launch at logon             tray menu toggle
 TTS status cues             short pipeline event phrases
 Runtime status              logs/runtime/runtime_status.json
 Command history             logs/history/command_history.jsonl
-Diagnostics                 mic / VAD / wake-word / STT model compare / TTS / target-send tests
+Diagnostics                 mic / VAD / wake-word / STT model compare / SenseVoice resources / TTS / target-send tests
 Manual recording            tray/settings control command, bypassing wake word
 Custom wake word            bundled world_activate.onnx
 ```
@@ -149,7 +149,7 @@ Module boundaries:
 - `control/` owns file-based tray IPC commands.
 - `events/` owns in-process status pub/sub and runtime status snapshots.
 - `history/` owns append-only command history and resend.
-- `diagnostics/` owns self-tests surfaced in the UI.
+- `diagnostics/` owns self-tests surfaced in the UI or CLI, including SenseVoice resource benchmarks. Missing optional tools such as `nvidia-smi` must be reported as unavailable rather than failing the diagnostic.
 - `tts/` owns Windows SAPI status speech only.
 - `ui/` owns PySide6 control center and desktop pet. No pipeline logic.
 - `utils/` contains only cross-cutting helpers that fit nowhere else.
@@ -181,7 +181,7 @@ RECORD_HOTKEY = "f9"
 
 `config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Codex Desktop, ChatGPT Desktop, Cursor, and Trae have all been live-tested for opening, focusing/injecting text, and sending prompts.
 
-STT defaults remain on `faster_whisper` + Whisper `small`. SenseVoice-Small support exists behind `stt.provider = "funasr_sensevoice"` and the settings UI, but the FunASR runtime is not part of the default project install yet. Missing SenseVoice dependencies should fail clearly in diagnostics instead of breaking Whisper comparison results.
+STT defaults remain on `faster_whisper` + Whisper `small`. SenseVoice-Small support exists behind `stt.provider = "funasr_sensevoice"` and the settings UI, but the FunASR runtime is not part of the default project install yet. Missing SenseVoice dependencies should fail clearly in diagnostics instead of breaking Whisper comparison results. The root `config.json` may be used as local user config for SenseVoice-Small + `cuda`; do not change `DEFAULT_CONFIG` away from `faster_whisper` + Whisper `small`.
 
 ---
 
@@ -244,6 +244,14 @@ Reusable modules should raise clear exceptions or log. CLI entry points may prin
 ## 9. Dependencies
 
 Runtime dependencies live in `requirements.txt` and are mirrored in `pyproject.toml`. Add dependencies intentionally, explain why, prefer stable/common packages, and avoid duplicates.
+
+SenseVoice-Small runtime is optional and must stay out of default dependencies:
+
+```powershell
+.venv\Scripts\pip.exe install -e ".[sensevoice]"
+```
+
+The `sensevoice` extra contains FunASR/ModelScope/Torch/Torchaudio. Keep `stt.sensevoice_device = "cpu"` in `DEFAULT_CONFIG` so long-running tray/listener defaults do not consume GPU VRAM. A user's root `config.json` may opt into `stt.sensevoice_device = "cuda"` after installing the extra. The SenseVoice engine must remain lazy-loaded; installing the extra or running the tray must not import Torch unless SenseVoice is selected and a transcription is actually requested.
 
 Bundled package data:
 

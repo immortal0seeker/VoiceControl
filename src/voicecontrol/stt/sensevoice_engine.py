@@ -59,7 +59,8 @@ class SenseVoiceEngine:
         except (ImportError, ModuleNotFoundError, PermissionError) as exc:
             raise SenseVoiceError(
                 "SenseVoice runtime is not installed or incomplete. "
-                "Install funasr, torch, torchaudio, and ensure ffmpeg is available."
+                'Install the optional extra with: .venv\\Scripts\\pip.exe install -e ".[sensevoice]". '
+                "Also ensure ffmpeg is available."
             ) from exc
         return AutoModel
 
@@ -81,7 +82,8 @@ class SenseVoiceEngine:
         except (ImportError, ModuleNotFoundError, PermissionError) as exc:
             raise SenseVoiceError(
                 "SenseVoice runtime is not installed or incomplete. "
-                "Install funasr, torch, torchaudio, and ensure ffmpeg is available."
+                'Install the optional extra with: .venv\\Scripts\\pip.exe install -e ".[sensevoice]". '
+                "Also ensure ffmpeg is available."
             ) from exc
         except Exception as exc:
             raise SenseVoiceError(f"Failed to load SenseVoice model: {exc}") from exc

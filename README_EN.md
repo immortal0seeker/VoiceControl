@@ -39,6 +39,21 @@ The first Whisper / openWakeWord run may need to download models. The custom wak
 
 STT defaults to `faster_whisper` + Whisper `small`. The settings UI also offers Whisper `medium` and SenseVoice-Small; SenseVoice-Small requires the FunASR runtime, which is not bundled in the default install yet.
 
+To enable SenseVoice-Small:
+
+```powershell
+.venv\Scripts\pip.exe install -e ".[sensevoice]"
+```
+
+Resource boundaries:
+
+- If SenseVoice-Small is not installed or not selected, VoiceControl does not import FunASR/Torch/Torchaudio and adds no extra CPU, RAM, or VRAM load.
+- The default SenseVoice config is CPU mode: `stt.sensevoice_device = "cpu"`, so it does not use GPU VRAM.
+- On a personal machine with `.[sensevoice]` installed and enough VRAM, you can set `stt.provider = "funasr_sensevoice"` and `stt.sensevoice_device = "cuda"` in the root `config.json`; this changes only local user config, not the repository defaults.
+- In the local spike, the SenseVoice-Small model cache was about 896.5 MiB and the VAD model about 3.8 MiB. Torch/FunASR themselves are also large, so they remain optional.
+- With SenseVoice-Small selected, the model loads lazily on the first transcription. Idle listening does not run inference; CPU load is mainly a short burst during transcription.
+- The current implementation reuses the loaded model to keep later transcriptions fast, so it keeps some RAM resident. If long-running background memory pressure becomes visible, the next step should be an idle model-unload or per-transcription loading option.
+
 ## Usage
 
 ### Control Center
@@ -141,9 +156,12 @@ Notes:
 .venv\Scripts\python.exe -m voicecontrol.audio.device_manager
 .venv\Scripts\python.exe -m voicecontrol.executor.window_utils
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
+.venv\Scripts\python.exe -m voicecontrol.diagnostics.sensevoice_resource --audio audio_files\recordings\<sample>.wav --device cuda
 ```
 
 The control center also provides microphone, VAD, wake-word, STT model comparison, TTS, default-target send tests, and log viewing. STT comparison runs Whisper `small`, Whisper `medium`, and SenseVoice-Small; if the SenseVoice runtime is missing, it shows a per-model error while preserving Whisper results.
+
+The SenseVoice resource diagnostic transcribes the same WAV twice and records provider/model/device, audio path, cold lazy-load+transcribe time, warm transcribe time, and Python process RSS before/after. If `nvidia-smi` is available, it also records GPU VRAM before/after; without `nvidia-smi`, the field is `null` and the diagnostic still completes. Missing FunASR/SenseVoice runtime is reported as a clear error with the optional-extra install command.
 
 ## Common Configuration
 
@@ -204,6 +222,7 @@ Shipped:
 
 - Microphone capture and STT transcription, defaulting to faster-whisper
 - STT provider factory, Whisper small/medium, SenseVoice-Small engine, and model comparison diagnostics
+- SenseVoice resource diagnostics: cold/warm timing, RSS, and optional `nvidia-smi` VRAM
 - F9 hotkey recording and VAD auto-stop
 - openWakeWord wake-word loop and tray daemon
 - Codex / ChatGPT / Cursor / Trae desktop drivers, with all four live send loops verified
@@ -222,6 +241,7 @@ Planned:
 - Custom desktop-pet avatars
 - Packaging and startup experience
 - Formal SenseVoice/FunASR dependency installation and release path
+- SenseVoice idle model unload / per-transcription loading option
 - Stability and diagnostics improvements
 - Smarter voice routing
 - CLI agent driver

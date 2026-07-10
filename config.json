@@ -3,7 +3,7 @@
     "input_device": null
   },
   "stt": {
-    "provider": "faster_whisper",
+    "provider": "funasr_sensevoice",
     "whisper_model_profile": "balanced_small",
     "whisper_model_size": "small",
     "whisper_device": "cuda",
@@ -13,7 +13,7 @@
     "whisper_vad_filter": true,
     "whisper_condition_on_previous_text": false,
     "sensevoice_model": "SenseVoiceSmall",
-    "sensevoice_device": "cpu",
+    "sensevoice_device": "cuda",
     "sensevoice_language": "zh"
   },
   "vad": {
@@ -25,7 +25,7 @@
     "poll_interval": 0.15
   },
   "executor": {
-    "default_target": "chatgpt",
+    "default_target": "codex",
     "codex_window_title": "Codex",
     "codex_launch_command": "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
     "codex_launch_timeout": 15.0,

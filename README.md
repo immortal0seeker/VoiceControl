@@ -39,6 +39,21 @@ python -m venv .venv
 
 STT 默认使用 `faster_whisper` + Whisper `small`。设置页也提供 Whisper `medium` 和 SenseVoice-Small 选项；SenseVoice-Small 需要额外安装 FunASR 运行时，默认安装暂不捆绑。
 
+如需启用 SenseVoice-Small：
+
+```powershell
+.venv\Scripts\pip.exe install -e ".[sensevoice]"
+```
+
+资源边界：
+
+- 未安装或未选择 SenseVoice-Small 时，不会导入 FunASR/Torch/Torchaudio，也不会占用额外 CPU、内存或显存。
+- 默认 SenseVoice 配置是 CPU 模式：`stt.sensevoice_device = "cpu"`，不会占用 GPU 显存。
+- 对已安装 `.[sensevoice]` 且显存充足的个人机器，可以在根目录 `config.json` 中设置 `stt.provider = "funasr_sensevoice"` 和 `stt.sensevoice_device = "cuda"`；这只影响本机用户配置，不改变仓库通用默认。
+- 本地 spike 中 SenseVoice-Small 模型缓存约 896.5 MiB，VAD 模型约 3.8 MiB；Torch/FunASR 依赖本身体积也较大，适合作为可选安装。
+- 选择 SenseVoice-Small 后，模型会在首次转写时懒加载；空闲监听阶段不做推理，CPU 主要在转写瞬间短时占用。
+- 当前实现会复用已加载模型以降低后续延迟，因此会保留一部分内存占用。若长期后台内存压力明显，下一步应增加“空闲释放模型”或“按次加载”开关。
+
 ## 运行
 
 ### 控制中心
@@ -141,9 +156,12 @@ trae
 .venv\Scripts\python.exe -m voicecontrol.audio.device_manager
 .venv\Scripts\python.exe -m voicecontrol.executor.window_utils
 .venv\Scripts\python.exe -m voicecontrol.utils.autostart
+.venv\Scripts\python.exe -m voicecontrol.diagnostics.sensevoice_resource --audio audio_files\recordings\<sample>.wav --device cuda
 ```
 
 控制中心也提供麦克风、VAD、唤醒词、STT 模型对比、TTS、默认目标发送测试和日志查看。STT 对比会比较 Whisper `small`、Whisper `medium` 和 SenseVoice-Small；如果 SenseVoice 运行时未安装，会显示单模型错误并保留 Whisper 结果。
+
+SenseVoice 资源诊断会用同一段 WAV 连续转写两次，记录 provider/model/device、音频路径、首次懒加载+转写耗时、warm 转写耗时、Python 进程 RSS 内存前后。如果系统有 `nvidia-smi`，还会记录 GPU 显存前后；没有 `nvidia-smi` 时该字段为 `null`，诊断不会因此失败。缺少 FunASR/SenseVoice 运行时时会写入清晰错误，并提示安装 optional extra。
 
 ## 常用配置
 
@@ -203,6 +221,7 @@ logs/
 
 - 麦克风录音与 STT 转写，默认 faster-whisper
 - STT provider factory、Whisper small/medium、SenseVoice-Small engine 与诊断对比
+- SenseVoice 资源占用诊断：cold/warm 耗时、RSS、可选 `nvidia-smi` 显存
 - F9 热键录音与 VAD 自动停录
 - openWakeWord 唤醒词和托盘后台
 - Codex / ChatGPT / Cursor / Trae 桌面 driver，四目标发送闭环已实测
@@ -221,6 +240,7 @@ logs/
 - 桌宠自定义形象
 - 打包启动体验
 - SenseVoice/FunASR 正式依赖安装与发布路径
+- SenseVoice 空闲释放模型 / 按次加载开关
 - 稳定性/诊断增强
 - 更智能的语音路由
 - CLI agent driver

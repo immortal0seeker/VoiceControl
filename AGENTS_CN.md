@@ -72,7 +72,7 @@ Trae driver             聚焦 -> 底部中性区域点击 -> Ctrl+U -> 粘贴 -
 TTS 状态提示            按流水线事件播报短句
 Runtime 状态            logs/runtime/runtime_status.json
 命令历史                logs/history/command_history.jsonl
-诊断                    麦克风 / VAD / 唤醒词 / STT 模型对比 / TTS / 默认目标发送测试
+诊断                    麦克风 / VAD / 唤醒词 / STT 模型对比 / SenseVoice 资源 / TTS / 默认目标发送测试
 手动录音                托盘或设置页写入控制命令，跳过唤醒词
 自定义唤醒词            bundled world_activate.onnx
 ```
@@ -149,7 +149,7 @@ VoiceControl/
 - `control/`：文件式托盘 IPC 命令。
 - `events/`：状态 pub/sub 和 runtime 状态快照。
 - `history/`：追加式命令历史和重发。
-- `diagnostics/`：设置 UI 中的自测工具。
+- `diagnostics/`：设置 UI 或 CLI 中的自测工具，包括 SenseVoice 资源基准；`nvidia-smi` 等可选工具缺失时应报告不可用，而不是让诊断失败。
 - `tts/`：Windows SAPI 状态短句。
 - `ui/`：PySide6 控制中心和桌宠；不放 pipeline 逻辑。
 - `utils/`：仅放无处归属的通用辅助。
@@ -181,7 +181,7 @@ RECORD_HOTKEY = "f9"
 
 `config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。Codex Desktop、ChatGPT Desktop、Cursor、Trae 均已实测完成打开、聚焦/注入文本和发送闭环。
 
-STT 默认仍保持 `faster_whisper` + Whisper `small`。SenseVoice-Small 已通过 `stt.provider = "funasr_sensevoice"` 和设置 UI 接入，但 FunASR 运行时暂未加入默认安装依赖；缺少 SenseVoice 依赖时，诊断应给出清晰的单模型错误，同时保留 Whisper 对比结果。
+STT 默认仍保持 `faster_whisper` + Whisper `small`。SenseVoice-Small 已通过 `stt.provider = "funasr_sensevoice"` 和设置 UI 接入，但 FunASR 运行时暂未加入默认安装依赖；缺少 SenseVoice 依赖时，诊断应给出清晰的单模型错误，同时保留 Whisper 对比结果。根目录 `config.json` 可作为本机用户配置启用 SenseVoice-Small + `cuda`；不要把 `DEFAULT_CONFIG` 从 `faster_whisper` + Whisper `small` 改掉。
 
 ---
 
@@ -244,6 +244,14 @@ class LaunchableAppDriver(AppDriver):
 ## 9. 依赖
 
 运行依赖在 `requirements.txt`，并与 `pyproject.toml` 同步。新增依赖要有明确理由，优先稳定常用包，避免重复。
+
+SenseVoice-Small 运行时是可选依赖，必须保持在默认依赖之外：
+
+```powershell
+.venv\Scripts\pip.exe install -e ".[sensevoice]"
+```
+
+`sensevoice` extra 包含 FunASR/ModelScope/Torch/Torchaudio。`DEFAULT_CONFIG` 默认保持 `stt.sensevoice_device = "cpu"`，避免长期托盘/监听默认占用 GPU 显存；用户根目录 `config.json` 可在安装 extra 后改为 `stt.sensevoice_device = "cuda"`。SenseVoice engine 必须保持懒加载；仅安装 extra 或启动托盘不应导入 Torch，只有选择 SenseVoice 并实际请求转写时才加载。
 
 打包资源：
 

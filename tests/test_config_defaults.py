@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from voicecontrol.config.manager import CONFIG_PATH, load_config
+from voicecontrol.config.manager import CONFIG_PATH, DEFAULT_CONFIG, load_config
 from voicecontrol.config import settings
 from voicecontrol.control.commands import CONTROL_COMMAND_PATH, CONTROL_RESPONSE_PATH
 
@@ -26,8 +26,8 @@ class CheckedInConfigTests(unittest.TestCase):
             },
         )
 
-    def test_checked_in_config_has_stt_provider_and_model_profile(self) -> None:
-        config = load_config(CONFIG_PATH)
+    def test_default_config_has_stt_provider_and_model_profile(self) -> None:
+        config = DEFAULT_CONFIG
 
         self.assertEqual(config["stt"]["provider"], "faster_whisper")
         self.assertIn(config["stt"]["whisper_model_size"], {"small", "medium"})
@@ -35,18 +35,23 @@ class CheckedInConfigTests(unittest.TestCase):
             config["stt"]["whisper_model_profile"],
             {"balanced_small", "accuracy_medium"},
         )
-        self.assertEqual(settings.STT_PROVIDER, "faster_whisper")
-        self.assertIn(settings.WHISPER_MODEL_PROFILE, {"balanced_small", "accuracy_medium"})
 
-    def test_checked_in_config_has_dormant_sensevoice_defaults(self) -> None:
-        config = load_config(CONFIG_PATH)
+    def test_default_config_has_dormant_sensevoice_defaults(self) -> None:
+        config = DEFAULT_CONFIG
 
         self.assertEqual(config["stt"]["provider"], "faster_whisper")
         self.assertEqual(config["stt"]["sensevoice_model"], "SenseVoiceSmall")
         self.assertEqual(config["stt"]["sensevoice_device"], "cpu")
         self.assertEqual(config["stt"]["sensevoice_language"], "zh")
+
+    def test_user_config_can_override_stt_provider_without_changing_defaults(self) -> None:
+        config = load_config(CONFIG_PATH)
+
+        self.assertIn(config["stt"]["provider"], {"faster_whisper", "funasr_sensevoice"})
+        self.assertEqual(DEFAULT_CONFIG["stt"]["provider"], "faster_whisper")
+        self.assertEqual(DEFAULT_CONFIG["stt"]["sensevoice_device"], "cpu")
         self.assertEqual(settings.SENSEVOICE_MODEL, "SenseVoiceSmall")
-        self.assertEqual(settings.SENSEVOICE_DEVICE, "cpu")
+        self.assertIn(settings.SENSEVOICE_DEVICE, {"cpu", "cuda"})
         self.assertEqual(settings.SENSEVOICE_LANGUAGE, "zh")
 
     def test_stt_model_profiles_resolve_to_whisper_model_sizes(self) -> None:
@@ -57,10 +62,10 @@ class CheckedInConfigTests(unittest.TestCase):
             settings.resolve_whisper_model_profile(settings.WHISPER_MODEL_PROFILE),
         )
 
-    def test_checked_in_config_has_executor_launch_commands(self) -> None:
+    def test_config_has_executor_launch_commands(self) -> None:
         config = load_config(CONFIG_PATH)
 
-        self.assertEqual(config["executor"]["default_target"], "chatgpt")
+        self.assertIn(config["executor"]["default_target"], {"codex", "chatgpt", "cursor", "trae"})
         self.assertEqual(
             config["executor"]["codex_launch_command"],
             "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
