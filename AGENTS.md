@@ -6,7 +6,7 @@ End-to-end goal:
 
 ```text
 speak -> wake word -> record -> speech-to-text -> route command
-      -> send to Codex / ChatGPT / Cursor / Trae -> execute task -> optional TTS
+      -> send to ChatGPT / ChatGPT Classic / Cursor / Trae -> execute task -> optional TTS
 ```
 
 This is a local desktop automation system driven by voice, not a generic chatbot.
@@ -60,8 +60,8 @@ Debug CLI hotkey trigger    F9 start/stop, Esc quit
 VAD auto-stop               --vad flag on hotkey loop
 Wake word + tray daemon     --wake or pythonw -m voicecontrol.tray_app
 Executor routing            codex / chatgpt / cursor / trae selected by executor.default_target
-Codex driver                focus -> click composer -> paste -> Enter; optional auto-launch
-ChatGPT driver              focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
+ChatGPT driver (`codex`)     focus -> click composer -> paste -> Enter; optional auto-launch
+Classic driver (`chatgpt`)  focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
 Cursor driver               focus -> Ctrl+Shift+L -> paste -> Enter; optional auto-launch
 Trae driver                 focus -> bottom neutral click -> Ctrl+U -> paste -> Enter; optional auto-launch
 Control center              python -m voicecontrol.ui.settings_app
@@ -145,11 +145,11 @@ Module boundaries:
 - `stt/` loads Whisper and transcribes files. No microphone logic.
 - `executor/` focuses target windows and sends text. No STT/recording logic.
 - `pipeline/` orchestrates lower modules and depends on `AppDriver`, not concrete drivers.
-- `config/` owns defaults and user override merging.
+- `config/` owns defaults and user override merging. User config saves use atomic same-directory replacement.
 - `control/` owns file-based tray IPC commands.
-- `events/` owns in-process status pub/sub and runtime status snapshots.
+- `events/` owns in-process status pub/sub and runtime status snapshots. Snapshot writes are serialized and use unique atomic temp files.
 - `history/` owns append-only command history and resend. Readers must skip and log malformed JSONL records so one damaged line does not hide later valid history.
-- `diagnostics/` owns self-tests surfaced in the UI or CLI, including SenseVoice resource benchmarks. Missing optional tools such as `nvidia-smi` must be reported as unavailable rather than failing the diagnostic. UI-triggered diagnostics must run off the Qt GUI thread.
+- `diagnostics/` owns self-tests surfaced in the UI or CLI, including SenseVoice resource benchmarks. Missing optional tools such as `nvidia-smi` must be reported as unavailable rather than failing the diagnostic. UI-triggered diagnostics run off the Qt GUI thread, one at a time; the settings window must remain open until the active diagnostic exits.
 - `tts/` owns Windows SAPI status speech only.
 - `ui/` owns PySide6 control center and desktop pet. No pipeline logic.
 - `utils/` contains only cross-cutting helpers that fit nowhere else.
@@ -172,8 +172,8 @@ VAD_SILENCE_DURATION = 3.0
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
 DEFAULT_EXECUTOR_TARGET = "cursor"  # codex | chatgpt | cursor | trae
-CODEX_WINDOW_TITLE = "Codex"
-CHATGPT_WINDOW_TITLE = "ChatGPT"
+CODEX_WINDOW_TITLE = "ChatGPT"
+CHATGPT_WINDOW_TITLE = "ChatGPT Classic"
 CURSOR_WINDOW_TITLE = "Cursor"
 TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
@@ -210,6 +210,7 @@ Rules:
 - ChatGPT Classic and Cursor focus their composer with `Ctrl+Shift+L`.
 - Trae first clicks the bottom neutral area to remove stale AI-sidebar focus, then uses `Ctrl+U` to focus the AI input. Do not click again after `Ctrl+U`.
 - ChatGPT (former Codex) still uses relative composer click coordinates. Window lookup must prefer exact case-insensitive matches before substring fallback.
+- Wake acknowledgement TTS must finish before command recording starts. Do not speak a second status phrase after the microphone opens.
 - Keep desktop actions logged and delayed slightly.
 - Be careful with focus loss, IME state, admin boundaries, and editor hotkeys.
 
@@ -238,6 +239,7 @@ launch failure, permission denied, hotkey conflict, TTS/SAPI unavailable
 ```
 
 Reusable modules should raise clear exceptions or log. CLI entry points may print user-facing errors.
+Always close PortAudio streams after partial start/stop failures. Whisper CPU fallback failures must remain wrapped in `TranscriptionError`.
 
 ---
 

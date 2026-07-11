@@ -9,9 +9,9 @@
 VoiceControl is a local voice-driven desktop assistant for Windows 11. After a wake word, it records your command, transcribes it with local STT, and sends it to the configured target app.
 
 ```text
-hey jarvis / world_activate -> beep or TTS "I'm here"
--> speak command -> VAD auto-stop -> STT transcription
--> send to Codex / ChatGPT / Cursor / Trae
+hey jarvis / world_activate -> finish beep or TTS "I'm here"
+-> start recording -> speak command -> VAD auto-stop -> STT transcription
+-> send to ChatGPT / ChatGPT Classic / Cursor / Trae
 ```
 
 It is a local desktop automation system, not a general chatbot.
@@ -72,7 +72,7 @@ Resource boundaries:
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-The control center edits `config.json`. Restart the tray/listener process after saving.
+The control center edits `config.json` using atomic same-directory replacement so an interrupted save cannot leave a partial file. Restart the tray/listener process after saving.
 
 The Executor card can choose the default target app:
 
@@ -169,7 +169,7 @@ Notes:
 .venv\Scripts\python.exe -m voicecontrol.diagnostics.sensevoice_resource --audio audio_files\recordings\<sample>.wav --device cuda
 ```
 
-The control center also provides microphone, VAD, wake-word, STT model comparison, TTS, default-target send tests, and log viewing. Long-running diagnostics execute on background threads so the settings window stays responsive. STT comparison runs Whisper `small`, Whisper `medium`, and SenseVoice-Small; if the SenseVoice runtime is missing, it shows a per-model error while preserving Whisper results.
+The control center also provides microphone, VAD, wake-word, STT model comparison, TTS, default-target send tests, and log viewing. Long-running diagnostics execute on background threads so the settings window stays responsive. Only one diagnostic runs at a time to avoid microphone/model/window contention, and the settings window stays open until it exits. STT comparison runs Whisper `small`, Whisper `medium`, and SenseVoice-Small; if the SenseVoice runtime is missing, it shows a per-model error while preserving Whisper results.
 
 The SenseVoice resource diagnostic transcribes the same WAV twice and records provider/model/device, audio path, cold lazy-load+transcribe time, warm transcribe time, and Python process RSS before/after. If `nvidia-smi` is available, it also records GPU VRAM before/after; without `nvidia-smi`, the field is `null` and the diagnostic still completes. Missing FunASR/SenseVoice runtime is reported as a clear error with the optional-extra install command.
 
@@ -240,10 +240,13 @@ Shipped:
 - AppsFolder launch-command config
 - PySide6 control center
 - Windows SAPI status TTS
-- Runtime status snapshot
+- Wake acknowledgement finishes synchronously before command recording starts, preventing system speech from entering the transcription
+- Thread-safe, atomically written runtime status snapshots with graceful handling of damaged files
 - Command history and resend; malformed JSONL rows are logged and skipped without hiding later valid records
 - Desktop pet status window
-- Diagnostics and logs pages
+- Single-run background diagnostics and logs pages; active diagnostics prevent premature window close
+- PortAudio streams close on error paths, and tray exit stops active recording
+- Whisper CUDA load can fall back to CPU; a double failure is reported consistently
 
 Planned:
 

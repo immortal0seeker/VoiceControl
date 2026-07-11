@@ -26,6 +26,15 @@ class TextSpeakerTests(unittest.TestCase):
 
         dispatch.assert_not_called()
 
+    def test_speak_can_wait_for_windows_sapi_to_finish(self) -> None:
+        voice = Mock()
+
+        with patch("voicecontrol.tts.speaker.win32com.client.Dispatch", return_value=voice):
+            speaker = TextSpeaker(enabled=True)
+            speaker.speak("我在", wait=True)
+
+        voice.Speak.assert_called_once_with("我在", 0)
+
     def test_blank_text_is_ignored(self) -> None:
         with patch("voicecontrol.tts.speaker.win32com.client.Dispatch") as dispatch:
             speaker = TextSpeaker(enabled=True)

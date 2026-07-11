@@ -8,7 +8,7 @@ VoiceControl 是面向 Windows 11 的本地语音驱动桌面自动化助手。M
 
 ```text
 说话 -> 唤醒词 -> 录音 -> 语音转文字 -> 路由命令
-     -> 发送到 Codex / ChatGPT / Cursor / Trae -> 执行任务 -> 可选 TTS
+      -> 发送到 ChatGPT / ChatGPT Classic / Cursor / Trae -> 执行任务 -> 可选 TTS
 ```
 
 这是一个由语音驱动的本地桌面自动化系统，不是通用聊天机器人。
@@ -62,8 +62,8 @@ pip install -e .
 VAD 自动停录            热键循环加 --vad
 唤醒词 + 托盘           --wake 或 pythonw -m voicecontrol.tray_app
 目标应用路由            executor.default_target = codex / chatgpt / cursor / trae
-Codex driver            聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
-ChatGPT driver          聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
+ChatGPT driver（`codex`）        聚焦 -> 点击输入框 -> 粘贴 -> Enter；支持自动启动
+Classic driver（`chatgpt`）     聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
 Cursor driver           聚焦 -> Ctrl+Shift+L -> 粘贴 -> Enter；支持自动启动
 Trae driver             聚焦 -> 底部中性区域点击 -> Ctrl+U -> 粘贴 -> Enter；支持自动启动
 控制中心                python -m voicecontrol.ui.settings_app
@@ -145,11 +145,11 @@ VoiceControl/
 - `stt/`：加载 Whisper、转写文件、规范化结果；不放麦克风逻辑。
 - `executor/`：聚焦目标窗口、发送文本、模拟输入；不放录音/STT 逻辑。
 - `pipeline/`：编排下层模块；依赖 `AppDriver`，不依赖具体 driver。
-- `config/`：默认值和用户配置合并。
+- `config/`：默认值和用户配置合并；用户配置通过同目录原子替换保存。
 - `control/`：文件式托盘 IPC 命令。
-- `events/`：状态 pub/sub 和 runtime 状态快照。
+- `events/`：状态 pub/sub 和 runtime 状态快照；快照写入需要串行化，并使用唯一临时文件原子替换。
 - `history/`：追加式命令历史和重发；读取时跳过并记录损坏的 JSONL 行，不能让单行损坏遮蔽后续有效历史。
-- `diagnostics/`：设置 UI 或 CLI 中的自测工具，包括 SenseVoice 资源基准；`nvidia-smi` 等可选工具缺失时应报告不可用，而不是让诊断失败；UI 发起的诊断必须离开 Qt GUI 线程运行。
+- `diagnostics/`：设置 UI 或 CLI 中的自测工具，包括 SenseVoice 资源基准；`nvidia-smi` 等可选工具缺失时应报告不可用，而不是让诊断失败；UI 发起的诊断必须离开 Qt GUI 线程、一次只运行一个，活动诊断退出前设置窗口保持打开。
 - `tts/`：Windows SAPI 状态短句。
 - `ui/`：PySide6 控制中心和桌宠；不放 pipeline 逻辑。
 - `utils/`：仅放无处归属的通用辅助。
@@ -172,8 +172,8 @@ VAD_SILENCE_DURATION = 3.0
 WAKE_WORD_MODEL = "hey_jarvis"
 WAKE_THRESHOLD = 0.5
 DEFAULT_EXECUTOR_TARGET = "cursor"  # codex | chatgpt | cursor | trae
-CODEX_WINDOW_TITLE = "Codex"
-CHATGPT_WINDOW_TITLE = "ChatGPT"
+CODEX_WINDOW_TITLE = "ChatGPT"
+CHATGPT_WINDOW_TITLE = "ChatGPT Classic"
 CURSOR_WINDOW_TITLE = "Cursor"
 TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
@@ -210,6 +210,7 @@ class LaunchableAppDriver(AppDriver):
 - ChatGPT Classic 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
 - Trae 先点击底部中性区域让 AI 侧栏失焦，再用 `Ctrl+U` 聚焦 AI 输入框；`Ctrl+U` 后不要再点击输入框。
 - ChatGPT（原 Codex）仍使用相对输入框点击坐标；窗口查找必须先做不区分大小写的精确匹配，再做子串兜底。
+- 唤醒回应 TTS 必须播放完成后才能开始命令录音；麦克风打开后不要再播第二句状态提示。
 - 桌面操作前后保留短延迟和清晰日志。
 - 注意焦点丢失、输入法、管理员权限边界、编辑器热键截获。
 
@@ -238,6 +239,7 @@ class LaunchableAppDriver(AppDriver):
 ```
 
 可复用模块应抛出清晰异常或记录日志。CLI 入口可以打印用户可读错误。
+PortAudio 流在部分启动/停止失败后也必须关闭；Whisper CPU 兜底失败必须统一包装为 `TranscriptionError`。
 
 ---
 

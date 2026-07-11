@@ -44,7 +44,7 @@ _STAGE_TITLES = {
     "recording": "录音中…",
     "transcribing": "识别中…",
     "sending": "发送中…",
-    "done": "已发送到 Codex",
+    "done": "已完成",
     "error": "出错（见日志）",
     "stopped": "已停止",
 }
@@ -229,6 +229,7 @@ class TrayApp:
     def _on_quit(self, _icon: Icon, _item: object) -> None:
         logger.info("Quit requested from tray.")
         self._stop_event.set()
+        self._recording_stop_event.set()
         if self._is_desktop_pet_running():
             assert self._desktop_pet_process is not None
             self._desktop_pet_process.terminate()

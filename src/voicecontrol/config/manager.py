@@ -8,9 +8,11 @@ and save ``config.json``. It intentionally does not import ``settings.py`` so
 from __future__ import annotations
 
 import json
+import os
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
 CONFIG_PATH: Path = PROJECT_ROOT / "config.json"
@@ -132,13 +134,20 @@ def load_config(path: str | Path = CONFIG_PATH) -> dict[str, Any]:
 def save_config(config: dict[str, Any], path: str | Path = CONFIG_PATH) -> Path:
     """Save ``config`` to ``config.json`` using stable pretty formatting."""
     config_path = Path(path)
+    temp_path = config_path.with_name(f".{config_path.name}.{uuid4().hex}.tmp")
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        with config_path.open("w", encoding="utf-8") as file:
+        with temp_path.open("w", encoding="utf-8") as file:
             json.dump(config, file, ensure_ascii=False, indent=2)
             file.write("\n")
+        os.replace(temp_path, config_path)
     except OSError as exc:
         raise ConfigError(f"Failed to write {config_path}: {exc}") from exc
+    finally:
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
     return config_path
 
 

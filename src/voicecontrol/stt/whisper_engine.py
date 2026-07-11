@@ -70,9 +70,17 @@ class WhisperEngine:
                 )
                 self.device = settings.WHISPER_CPU_DEVICE
                 self.compute_type = settings.WHISPER_CPU_COMPUTE_TYPE
-                self._model = WhisperModel(
-                    self.model_size, device=self.device, compute_type=self.compute_type
-                )
+                try:
+                    self._model = WhisperModel(
+                        self.model_size,
+                        device=self.device,
+                        compute_type=self.compute_type,
+                    )
+                except Exception as cpu_exc:
+                    raise TranscriptionError(
+                        "Failed to load Whisper on the configured device, and CPU fallback "
+                        f"also failed: {cpu_exc}"
+                    ) from cpu_exc
             else:
                 raise TranscriptionError(f"Failed to load Whisper model: {exc}") from exc
 

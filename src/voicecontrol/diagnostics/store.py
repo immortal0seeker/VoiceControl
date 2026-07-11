@@ -38,7 +38,7 @@ def append_diagnostic_result(
     """Append ``result`` as one JSON line and return the diagnostics path."""
     diagnostic_path = Path(path) if path is not None else settings.DIAGNOSTICS_HISTORY_PATH
     diagnostic_path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(result.to_json_dict(), ensure_ascii=False) + "\n"
     with diagnostic_path.open("a", encoding="utf-8") as file:
-        json.dump(result.to_json_dict(), file, ensure_ascii=False)
-        file.write("\n")
+        file.write(line)
     return diagnostic_path

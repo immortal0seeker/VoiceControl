@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -637,31 +638,22 @@ class SettingsWindowNavigationTests(unittest.TestCase):
                     details={"models": {"small": {"text": "a"}, "medium": {"text": "b"}}},
                 )
 
-                mic_button.click()
                 vad_path.setText("sample_vad.wav")
-                vad_button.click()
                 wake_path.setText("sample_wake.wav")
+
+                mic_button.click()
+                self.assertTrue(_process_events_until(mic_button.isEnabled))
+                vad_button.click()
+                self.assertTrue(_process_events_until(vad_button.isEnabled))
                 wake_button.click()
+                self.assertTrue(_process_events_until(wake_button.isEnabled))
                 tts_button.click()
                 codex_button.click()
+                self.assertTrue(_process_events_until(codex_button.isEnabled))
                 draft_button.click()
+                self.assertTrue(_process_events_until(draft_button.isEnabled))
                 stt_compare_button.click()
-
-                self.assertTrue(
-                    _process_events_until(
-                        lambda: all(
-                            button.isEnabled()
-                            for button in (
-                                mic_button,
-                                vad_button,
-                                wake_button,
-                                codex_button,
-                                draft_button,
-                                stt_compare_button,
-                            )
-                        )
-                    )
-                )
+                self.assertTrue(_process_events_until(stt_compare_button.isEnabled))
 
             microphone.assert_called_once_with(diagnostic_path=diagnostic_path)
             vad.assert_called_once_with("sample_vad.wav", diagnostic_path=diagnostic_path)
@@ -765,6 +757,64 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
         self.assertTrue(stt_button.isEnabled())
         self.assertIn("ok", stt_result.text())
+
+    def test_diagnostic_page_rejects_a_second_concurrent_run(self) -> None:
+        window = SettingsWindow(load_config())
+        mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
+        vad_path = window.findChild(QLineEdit, "vadTestFilePath")
+        vad_button = window.findChild(QPushButton, "runVadTestButton")
+        vad_result = window.findChild(QLabel, "vadTestResultLabel")
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_microphone(*, diagnostic_path: Path | None = None) -> DiagnosticResult:
+            started.set()
+            release.wait(timeout=2.0)
+            return DiagnosticResult(name="microphone", status="ok")
+
+        with (
+            patch(
+                "voicecontrol.ui.pages.diagnostics_page.run_microphone_test",
+                side_effect=blocking_microphone,
+            ),
+            patch("voicecontrol.ui.pages.diagnostics_page.run_vad_file_test") as vad,
+        ):
+            mic_button.click()
+            self.assertTrue(started.wait(timeout=1.0))
+            vad_path.setText("sample.wav")
+            vad_button.click()
+
+            vad.assert_not_called()
+            self.assertIn("已有诊断运行中", vad_result.text())
+            release.set()
+            self.assertTrue(_process_events_until(mic_button.isEnabled))
+
+    def test_window_refuses_to_close_while_diagnostic_thread_is_running(self) -> None:
+        window = SettingsWindow(load_config())
+        mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_microphone(*, diagnostic_path: Path | None = None) -> DiagnosticResult:
+            started.set()
+            release.wait(timeout=2.0)
+            return DiagnosticResult(name="microphone", status="ok")
+
+        with (
+            patch(
+                "voicecontrol.ui.pages.diagnostics_page.run_microphone_test",
+                side_effect=blocking_microphone,
+            ),
+            patch.object(QMessageBox, "information") as information,
+        ):
+            mic_button.click()
+            self.assertTrue(started.wait(timeout=1.0))
+
+            self.assertFalse(window.close())
+            information.assert_called_once()
+
+            release.set()
+            self.assertTrue(_process_events_until(mic_button.isEnabled))
 
     def test_diagnostic_button_shows_service_exception(self) -> None:
         window = SettingsWindow(load_config())

@@ -62,6 +62,14 @@ class TrayRecordingControlTests(unittest.TestCase):
         app._set_stage("transcribing")
         self.assertFalse(app._is_recording)
 
+    def test_done_stage_title_is_target_neutral(self) -> None:
+        app = self._app()
+
+        app._set_stage("done")
+
+        self.assertIn("已完成", app._icon.title)
+        self.assertNotIn("Codex", app._icon.title)
+
     def test_control_command_start_and_stop_update_recording_state(self) -> None:
         app = self._app()
 
@@ -82,6 +90,17 @@ class TrayRecordingControlTests(unittest.TestCase):
 
         app._handle_control_command(RESUME_LISTENING)
         self.assertFalse(app._paused.is_set())
+
+    def test_quit_requests_active_recording_to_stop(self) -> None:
+        app = self._app()
+        app._stop_event = threading.Event()
+        app._desktop_pet_process = None
+
+        app._on_quit(app._icon, Mock())
+
+        self.assertTrue(app._stop_event.is_set())
+        self.assertTrue(app._recording_stop_event.is_set())
+        app._icon.stop.assert_called_once_with()
 
     def test_pause_and_resume_commands_write_runtime_status_snapshot(self) -> None:
         app = self._app()

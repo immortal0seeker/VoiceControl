@@ -67,8 +67,8 @@ class EndpointState:
 class EndpointDetector:
     """Decides when speech has started and then ended (trailing silence).
 
-    Operates on the whole audio captured so far; call ``evaluate`` on a
-    growing buffer until ``finished`` is ``True``.
+    Feed new audio through ``update`` for streaming use, or call ``evaluate``
+    once for a complete clip.
     """
 
     def __init__(

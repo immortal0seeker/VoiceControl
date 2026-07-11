@@ -93,7 +93,7 @@ class StreamRecorder:
     """Open-ended recording: ``start()`` then ``stop()`` at any time.
 
     Used by the hotkey-driven flow where the duration is unknown in advance.
-    advance. Audio is captured on PortAudio's callback thread and collected
+    Audio is captured on PortAudio's callback thread and collected
     into memory until ``stop()`` is called.
     """
 
@@ -137,17 +137,13 @@ class StreamRecorder:
             )
             self._stream.start()
         except Exception as exc:
+            if self._stream is not None:
+                try:
+                    self._stream.close()
+                except Exception:
+                    logger.debug("Failed to close input stream after start error.", exc_info=True)
             self._stream = None
             raise RecordingError(f"Failed to open input stream: {exc}") from exc
-
-    # Early VAD read the full buffer each poll; replaced by read_new(). Kept commented
-    # in case a one-shot "audio so far" debug helper is needed again.
-    # def snapshot(self) -> np.ndarray:
-    #     """Return audio captured so far without stopping the stream."""
-    #     chunks = list(self._chunks)  # copy ref; appends are GIL-atomic
-    #     if not chunks:
-    #         return np.empty((0, self.channels), dtype=settings.DTYPE)
-    #     return np.concatenate(chunks, axis=0)
 
     def read_new(self) -> np.ndarray:
         """Return only samples captured since the previous ``read_new`` call.
@@ -167,13 +163,22 @@ class StreamRecorder:
         if self._stream is None:
             raise RecordingError("No recording in progress.")
 
+        stream = self._stream
+        failure: Exception | None = None
         try:
-            self._stream.stop()
-            self._stream.close()
+            stream.stop()
         except Exception as exc:
-            raise RecordingError(f"Failed to close input stream: {exc}") from exc
-        finally:
-            self._stream = None
+            failure = exc
+        try:
+            stream.close()
+        except Exception as exc:
+            if failure is None:
+                failure = exc
+            else:
+                logger.debug("Input stream close also failed.", exc_info=True)
+        self._stream = None
+        if failure is not None:
+            raise RecordingError(f"Failed to close input stream: {failure}") from failure
 
         if not self._chunks:
             return np.empty((0, self.channels), dtype=settings.DTYPE)
@@ -227,15 +232,25 @@ class MicFrameStream:
             )
             self._stream.start()
         except Exception as exc:
+            if self._stream is not None:
+                try:
+                    self._stream.close()
+                except Exception:
+                    logger.debug("Failed to close mic frame stream after start error.", exc_info=True)
             self._stream = None
             raise RecordingError(f"Failed to open mic frame stream: {exc}") from exc
         return self
 
     def __exit__(self, *exc_info: object) -> None:
         if self._stream is not None:
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
+            stream = self._stream
+            try:
+                stream.stop()
+            finally:
+                try:
+                    stream.close()
+                finally:
+                    self._stream = None
 
     def read(self, timeout: float = 0.5) -> np.ndarray | None:
         """Return the next frame as a 1D array, or ``None`` if none arrived."""

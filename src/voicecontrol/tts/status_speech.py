@@ -37,15 +37,16 @@ class StatusSpeechSubscriber:
         if phrase is None:
             return
         try:
-            self.speaker.speak(phrase)
+            if event.type == StatusType.WAKE:
+                self.speaker.speak(phrase, wait=True)
+            else:
+                self.speaker.speak(phrase)
         except TtsError:
             logger.exception("TTS status speech failed for %s.", event.type)
 
     def _phrase_for(self, event: StatusEvent) -> str | None:
         if event.type == StatusType.WAKE:
             return "我在"
-        if event.type == StatusType.RECORDING:
-            return "请说"
         if event.type == StatusType.TRANSCRIBING:
             return "正在识别"
         if event.type == StatusType.SENDING:

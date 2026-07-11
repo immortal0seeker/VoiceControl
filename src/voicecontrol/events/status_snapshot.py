@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from voicecontrol.config import settings
 from voicecontrol.events.status import StatusEvent, StatusType
@@ -68,6 +70,7 @@ class RuntimeStatusSnapshotStore:
         self._max_events = max_events
         self._recent_events: list[dict[str, str]] = []
         self._last_error: str | None = None
+        self._lock = threading.Lock()
 
     def handle_event(self, event: StatusEvent) -> RuntimeStatusSnapshot:
         """Record ``event`` and write the updated snapshot."""
@@ -75,39 +78,46 @@ class RuntimeStatusSnapshotStore:
 
     def publish(self, event_type: StatusType, message: str = "") -> RuntimeStatusSnapshot:
         """Create and persist a snapshot for ``event_type``."""
-        event_entry = {
-            "type": event_type.value,
-            "message": message,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-        }
-        self._recent_events.append(event_entry)
-        self._recent_events = self._recent_events[-self._max_events :]
+        with self._lock:
+            event_entry = {
+                "type": event_type.value,
+                "message": message,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            self._recent_events.append(event_entry)
+            self._recent_events = self._recent_events[-self._max_events :]
 
-        if event_type == StatusType.ERROR:
-            self._last_error = message or "未知错误"
+            if event_type == StatusType.ERROR:
+                self._last_error = message or "未知错误"
 
-        snapshot = RuntimeStatusSnapshot(
-            current=event_type.value,
-            message=message,
-            is_recording=event_type == StatusType.RECORDING,
-            is_sending=event_type == StatusType.SENDING,
-            last_error=self._last_error,
-            recent_events=list(self._recent_events),
-        )
-        write_runtime_status(snapshot, self._path)
-        return snapshot
+            snapshot = RuntimeStatusSnapshot(
+                current=event_type.value,
+                message=message,
+                is_recording=event_type == StatusType.RECORDING,
+                is_sending=event_type == StatusType.SENDING,
+                last_error=self._last_error,
+                recent_events=list(self._recent_events),
+            )
+            write_runtime_status(snapshot, self._path)
+            return snapshot
 
 
 def write_runtime_status(snapshot: RuntimeStatusSnapshot, path: str | Path | None = None) -> Path:
     """Atomically write ``snapshot`` to disk and return the path."""
     status_path = Path(path) if path is not None else settings.RUNTIME_STATUS_PATH
     status_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = status_path.with_name(f"{status_path.name}.tmp")
-    temp_path.write_text(
-        json.dumps(snapshot.to_json_dict(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    os.replace(temp_path, status_path)
+    temp_path = status_path.with_name(f".{status_path.name}.{uuid4().hex}.tmp")
+    try:
+        temp_path.write_text(
+            json.dumps(snapshot.to_json_dict(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temp_path, status_path)
+    finally:
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
     return status_path
 
 
@@ -123,4 +133,8 @@ def read_runtime_status(path: str | Path | None = None) -> RuntimeStatusSnapshot
         return None
     if not isinstance(data, dict):
         return None
-    return RuntimeStatusSnapshot.from_json_dict(data)
+    try:
+        return RuntimeStatusSnapshot.from_json_dict(data)
+    except (TypeError, ValueError):
+        logger.debug("Invalid runtime status snapshot in %s.", status_path)
+        return None

@@ -9,9 +9,9 @@
 VoiceControl 是 Windows 11 本地语音桌面助手：说出唤醒词后录音，使用本地 STT 转写，再把命令发送到配置的目标应用。
 
 ```text
-hey jarvis / world_activate -> 蜂鸣或 TTS「我在」
--> 说命令 -> VAD 自动停录 -> STT 转写
--> 发送到 Codex / ChatGPT / Cursor / Trae
+hey jarvis / world_activate -> 蜂鸣或 TTS「我在」播放完成
+-> 开始录音 -> 说命令 -> VAD 自动停录 -> STT 转写
+-> 发送到 ChatGPT / ChatGPT Classic / Cursor / Trae
 ```
 
 它是本地桌面自动化系统，不是通用聊天机器人。
@@ -72,7 +72,7 @@ STT 默认使用 `faster_whisper` + Whisper `small`。设置页也提供 Whisper
 .venv\Scripts\python.exe -m voicecontrol.ui.settings_app
 ```
 
-控制中心可修改 `config.json`。保存后需要重启托盘/监听进程才生效。
+控制中心可修改 `config.json`，保存过程使用同目录原子替换，避免中断时留下半写文件。保存后需要重启托盘/监听进程才生效。
 
 设置页的 Executor 卡片可以选择默认目标应用：
 
@@ -169,7 +169,7 @@ trae
 .venv\Scripts\python.exe -m voicecontrol.diagnostics.sensevoice_resource --audio audio_files\recordings\<sample>.wav --device cuda
 ```
 
-控制中心也提供麦克风、VAD、唤醒词、STT 模型对比、TTS、默认目标发送测试和日志查看。耗时诊断在后台线程运行，不阻塞设置窗口。STT 对比会比较 Whisper `small`、Whisper `medium` 和 SenseVoice-Small；如果 SenseVoice 运行时未安装，会显示单模型错误并保留 Whisper 结果。
+控制中心也提供麦克风、VAD、唤醒词、STT 模型对比、TTS、默认目标发送测试和日志查看。耗时诊断在后台线程运行，不阻塞设置窗口；为避免争用麦克风、模型或目标窗口，一次只运行一个诊断，完成前设置窗口不会关闭。STT 对比会比较 Whisper `small`、Whisper `medium` 和 SenseVoice-Small；如果 SenseVoice 运行时未安装，会显示单模型错误并保留 Whisper 结果。
 
 SenseVoice 资源诊断会用同一段 WAV 连续转写两次，记录 provider/model/device、音频路径、首次懒加载+转写耗时、warm 转写耗时、Python 进程 RSS 内存前后。如果系统有 `nvidia-smi`，还会记录 GPU 显存前后；没有 `nvidia-smi` 时该字段为 `null`，诊断不会因此失败。缺少 FunASR/SenseVoice 运行时时会写入清晰错误，并提示安装 optional extra。
 
@@ -239,10 +239,13 @@ logs/
 - AppsFolder 启动命令配置
 - PySide6 控制中心
 - Windows SAPI 状态 TTS
-- runtime 状态快照
+- 唤醒回应“我在”同步播放完成后才打开命令录音，避免系统提示混入转写
+- 线程安全、原子写入的 runtime 状态快照；损坏快照会安全降级
 - 命令历史与重发；损坏的 JSONL 行会记录警告并跳过，不影响后续有效记录
 - 桌宠状态窗口
-- 诊断页和日志页
+- 单任务后台诊断页和日志页；活动诊断完成前阻止关闭窗口
+- PortAudio 异常路径主动关闭流，托盘退出会停止活动录音
+- Whisper CUDA 加载失败可回退 CPU，双重失败统一返回清晰错误
 
 计划中：
 

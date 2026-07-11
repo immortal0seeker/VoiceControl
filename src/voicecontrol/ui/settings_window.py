@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -85,11 +86,12 @@ class SettingsWindow(QMainWindow):
         self._page_stack.setObjectName("pageStack")
 
         self._status_page = StatusPage(runtime_status_path=self._runtime_status_path)
+        self._diagnostics_page = DiagnosticsPage(self._diagnostic_path, self._config)
 
         nav_pages: list[tuple[str, str, QWidget]] = [
             ("录音", "navRecording", self._status_page),
             ("设置", "navSettings", SettingsPage(self._config)),
-            ("诊断", "navDiagnostics", DiagnosticsPage(self._diagnostic_path, self._config)),
+            ("诊断", "navDiagnostics", self._diagnostics_page),
             (
                 "命令历史",
                 "navCommandHistory",
@@ -126,6 +128,14 @@ class SettingsWindow(QMainWindow):
         self._status_page.handle_event(event)
 
     def closeEvent(self, event: Any) -> None:
+        if self._diagnostics_page.has_running_diagnostics():
+            QMessageBox.information(
+                self,
+                "诊断仍在运行",
+                "请等待当前诊断完成后再关闭设置窗口。",
+            )
+            event.ignore()
+            return
         if self._status_unsubscribe is not None:
             self._status_unsubscribe()
             self._status_unsubscribe = None

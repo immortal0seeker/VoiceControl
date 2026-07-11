@@ -256,6 +256,9 @@ class DiagnosticsPage(QWidget):
         result_label: QLabel,
         runner: Callable[[], DiagnosticResult],
     ) -> None:
+        if self._diagnostic_runs:
+            result_label.setText("已有诊断运行中，请等待完成。")
+            return
         button.setEnabled(False)
         result_label.setText("运行中…")
         self._next_diagnostic_run_id += 1
@@ -266,10 +269,16 @@ class DiagnosticsPage(QWidget):
         worker.completed.connect(self._finish_diagnostic)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
+        thread.setProperty("diagnosticRunId", run_id)
+        thread.finished.connect(self._diagnostic_thread_finished)
         thread.finished.connect(thread.deleteLater)
         self._diagnostic_runs[run_id] = (thread, worker, button, result_label)
         thread.started.connect(worker.run)
         thread.start()
+
+    def has_running_diagnostics(self) -> bool:
+        """Return whether a background diagnostic is still active."""
+        return bool(self._diagnostic_runs)
 
     @Slot(int, object, str)
     def _finish_diagnostic(
@@ -278,12 +287,23 @@ class DiagnosticsPage(QWidget):
         result: DiagnosticResult | None,
         error: str,
     ) -> None:
-        run = self._diagnostic_runs.pop(run_id, None)
+        run = self._diagnostic_runs.get(run_id)
         if run is None:
             return
-        _thread, _worker, button, result_label = run
+        _thread, _worker, _button, result_label = run
         if error:
             result_label.setText(f"error：{error}")
         elif result is not None:
             result_label.setText(_format_diagnostic_result(result))
+
+    @Slot()
+    def _diagnostic_thread_finished(self) -> None:
+        thread = self.sender()
+        if not isinstance(thread, QThread):
+            return
+        run_id = int(thread.property("diagnosticRunId"))
+        run = self._diagnostic_runs.pop(run_id, None)
+        if run is None:
+            return
+        _thread, _worker, button, _result_label = run
         button.setEnabled(True)

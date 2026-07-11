@@ -9,6 +9,16 @@ from voicecontrol.tts.status_speech import StatusSpeechSubscriber, create_status
 
 
 class StatusSpeechSubscriberTests(unittest.TestCase):
+    def test_wake_response_finishes_before_recording_and_recording_has_no_tts(self) -> None:
+        publisher = StatusPublisher()
+        speaker = Mock()
+        StatusSpeechSubscriber(speaker=speaker, publisher=publisher)
+
+        publisher.publish(StatusType.WAKE)
+        publisher.publish(StatusType.RECORDING)
+
+        speaker.speak.assert_called_once_with("我在", wait=True)
+
     def test_subscriber_speaks_for_key_status_events(self) -> None:
         publisher = StatusPublisher()
         speaker = Mock()

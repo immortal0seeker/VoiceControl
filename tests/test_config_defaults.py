@@ -1,13 +1,32 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from voicecontrol.config.manager import CONFIG_PATH, DEFAULT_CONFIG, load_config
+from voicecontrol.config.manager import CONFIG_PATH, DEFAULT_CONFIG, load_config, save_config
 from voicecontrol.config import settings
 from voicecontrol.control.commands import CONTROL_COMMAND_PATH, CONTROL_RESPONSE_PATH
 
 
 class CheckedInConfigTests(unittest.TestCase):
+    def test_save_config_uses_atomic_same_directory_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            real_replace = os.replace
+            with patch(
+                "voicecontrol.config.manager.os.replace",
+                side_effect=real_replace,
+            ) as replace:
+                save_config({"audio": {"input_device": None}}, path)
+
+            source, target = replace.call_args.args
+            self.assertEqual(Path(source).parent, path.parent)
+            self.assertEqual(Path(target), path)
+            self.assertIsNone(load_config(path)["audio"]["input_device"])
+
     def test_checked_in_vad_max_record_seconds_allows_long_voice_commands(self) -> None:
         config = load_config(CONFIG_PATH)
 

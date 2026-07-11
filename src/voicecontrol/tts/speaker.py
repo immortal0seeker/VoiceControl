@@ -55,15 +55,16 @@ class TextSpeaker:
                 return
         logger.warning("Configured TTS voice not found: %s", voice_name)
 
-    def speak(self, text: str) -> None:
-        """Speak ``text`` asynchronously when TTS is enabled."""
+    def speak(self, text: str, *, wait: bool = False) -> None:
+        """Speak ``text``, optionally waiting for SAPI playback to finish."""
         if not self.enabled:
             return
         message = text.strip()
         if not message:
             return
         try:
-            self._voice_engine().Speak(message, SPF_ASYNC)
+            flags = 0 if wait else SPF_ASYNC
+            self._voice_engine().Speak(message, flags)
         except Exception as exc:
             raise TtsError(f"Failed to speak text: {exc}") from exc
 

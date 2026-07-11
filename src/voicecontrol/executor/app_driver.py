@@ -1,6 +1,6 @@
 """Pluggable driver interface for target applications.
 
-One driver per target app (Codex, ChatGPT, Cursor, ...). Drivers focus the
+One driver per target app (ChatGPT, ChatGPT Classic, Cursor, ...). Drivers focus the
 app window and send a prompt via clipboard paste + Enter (preferred over
 char-by-char typing for Chinese / long prompts).
 """
@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 class AppDriver(ABC):
     """Base driver: locate + focus a window, then paste & submit a prompt.
 
-    Subclasses set ``app_name`` and ``window_title`` (a case-insensitive
-    substring of the target window's title).
+    Subclasses set ``app_name`` and ``window_title``. Lookup prefers an exact
+    case-insensitive title and then falls back to a substring match.
     """
 
     app_name: str = "App"
