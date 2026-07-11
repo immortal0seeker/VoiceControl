@@ -83,6 +83,17 @@ def test_sensevoice_engine_reports_missing_runtime() -> None:
         engine.load()
 
 
+def test_sensevoice_engine_rejects_cuda_when_pytorch_cuda_is_unavailable() -> None:
+    engine = SenseVoiceEngine(
+        device="cuda",
+        cuda_available=lambda: False,
+        automodel_factory=lambda **kwargs: FakeSenseVoiceModel(),
+    )
+
+    with pytest.raises(SenseVoiceError, match="CUDA-enabled PyTorch"):
+        engine.load()
+
+
 def test_sensevoice_engine_rejects_missing_audio_file(tmp_path: Path) -> None:
     engine = SenseVoiceEngine(automodel_factory=lambda **kwargs: FakeSenseVoiceModel())
 

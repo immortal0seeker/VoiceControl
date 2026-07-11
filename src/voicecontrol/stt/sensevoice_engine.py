@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 _SENSEVOICE_TAG_RE = re.compile(r"<\|[^|]*\|>")
 
 
+def _torch_cuda_is_available() -> bool:
+    """Return whether the lazily imported PyTorch runtime can use CUDA."""
+    try:
+        import torch
+    except (ImportError, ModuleNotFoundError):
+        return False
+    return bool(torch.cuda.is_available())
+
+
 class SenseVoiceError(RuntimeError):
     """Raised when SenseVoice cannot load or transcribe."""
 
@@ -33,6 +42,7 @@ class SenseVoiceEngine:
         vad_model: str = "fsmn-vad",
         vad_max_single_segment_time: int = 30000,
         automodel_factory: Callable[..., object] | None = None,
+        cuda_available: Callable[[], bool] | None = None,
     ) -> None:
         self.model = model
         self.device = device
@@ -40,6 +50,7 @@ class SenseVoiceEngine:
         self.vad_model = vad_model
         self.vad_max_single_segment_time = vad_max_single_segment_time
         self._automodel_factory = automodel_factory
+        self._cuda_available = cuda_available or _torch_cuda_is_available
         self._model: object | None = None
 
     @property
@@ -68,6 +79,13 @@ class SenseVoiceEngine:
         """Load the SenseVoice model if needed."""
         if self._model is not None:
             return
+
+        if self.device.casefold().startswith("cuda") and not self._cuda_available():
+            raise SenseVoiceError(
+                "SenseVoice is configured for CUDA, but this PyTorch build cannot use CUDA. "
+                "Install a CUDA-enabled PyTorch build from https://pytorch.org/get-started/locally/ "
+                'or set stt.sensevoice_device to "cpu".'
+            )
 
         automodel_factory = self._load_automodel_factory()
         try:

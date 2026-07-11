@@ -143,9 +143,11 @@ class SettingsPage(QWidget):
         if profile_index >= 0:
             whisper_profile.setCurrentIndex(profile_index)
         whisper_profile.setMinimumWidth(220)
-        whisper_device = combo(
-            get_nested(self._config, ("stt", "whisper_device")), ["cuda", "cpu"]
+        current_device_key = (
+            "sensevoice_device" if current_provider == "funasr_sensevoice" else "whisper_device"
         )
+        stt_device = combo(get_nested(self._config, ("stt", current_device_key)), ["cuda", "cpu"])
+        stt_device.setObjectName("sttDevice")
         whisper_compute = combo(
             get_nested(self._config, ("stt", "whisper_compute_type")),
             ["float16", "int8", "float32"],
@@ -154,7 +156,7 @@ class SettingsPage(QWidget):
         whisper_vad = switch(get_nested(self._config, ("stt", "whisper_vad_filter")))
 
         add_row(layout, "STT 模型", whisper_profile, "Whisper small/medium 和 SenseVoice-Small 可切换。")
-        add_row(layout, "计算设备", whisper_device, "有 NVIDIA CUDA 时用 cuda；否则用 cpu。")
+        add_row(layout, "计算设备", stt_device, "有 NVIDIA CUDA 时用 cuda；否则用 cpu。")
         add_row(layout, "计算精度", whisper_compute, "GPU 常用 float16，CPU 常用 int8。")
         add_row(layout, "Beam Size", whisper_beam, "越大可能更准，但速度更慢。")
         add_row(layout, "Whisper VAD 过滤", whisper_vad, "过滤静音和噪声，减少幻觉文本。")
@@ -166,6 +168,16 @@ class SettingsPage(QWidget):
             if selected_stt_choice() == "sensevoice_small":
                 return "funasr_sensevoice"
             return "faster_whisper"
+
+        def update_stt_device() -> None:
+            device_key = (
+                "sensevoice_device"
+                if selected_stt_provider() == "funasr_sensevoice"
+                else "whisper_device"
+            )
+            stt_device.setCurrentText(get_nested(self._config, ("stt", device_key)))
+
+        whisper_profile.currentIndexChanged.connect(update_stt_device)
 
         def selected_whisper_profile() -> str:
             choice = selected_stt_choice()
@@ -190,7 +202,20 @@ class SettingsPage(QWidget):
             if selected_stt_choice() == "sensevoice_small"
             else get_nested(self._config, ("stt", "sensevoice_model")),
         )
-        register(self._bindings, ("stt", "whisper_device"), whisper_device.currentText)
+        register(
+            self._bindings,
+            ("stt", "whisper_device"),
+            lambda: stt_device.currentText()
+            if selected_stt_provider() == "faster_whisper"
+            else get_nested(self._config, ("stt", "whisper_device")),
+        )
+        register(
+            self._bindings,
+            ("stt", "sensevoice_device"),
+            lambda: stt_device.currentText()
+            if selected_stt_provider() == "funasr_sensevoice"
+            else get_nested(self._config, ("stt", "sensevoice_device")),
+        )
         register(self._bindings, ("stt", "whisper_compute_type"), whisper_compute.currentText)
         register(self._bindings, ("stt", "whisper_beam_size"), whisper_beam.value)
         register(self._bindings, ("stt", "whisper_vad_filter"), whisper_vad.isChecked)
@@ -249,17 +274,24 @@ class SettingsPage(QWidget):
 
     def _add_executor_card(self, content_layout: QVBoxLayout) -> None:
         frame, layout = card("Executor")
-        target = combo(
-            get_nested(self._config, ("executor", "default_target")),
-            ["codex", "chatgpt", "cursor", "trae"],
-        )
+        target = QComboBox()
+        for display_name, target_key in (
+            ("ChatGPT", "codex"),
+            ("ChatGPT Classic", "chatgpt"),
+            ("Cursor", "cursor"),
+            ("Trae", "trae"),
+        ):
+            target.addItem(display_name, target_key)
+        target_index = target.findData(get_nested(self._config, ("executor", "default_target")))
+        if target_index >= 0:
+            target.setCurrentIndex(target_index)
         target.setObjectName("executorTargetCombo")
 
         target_app_fields = {
             "codex": (
                 "codex_window_title",
                 "codex_launch_command",
-                "Codex",
+                "ChatGPT",
                 "composer_click_rel_x",
                 "composer_click_rel_y",
                 "composerClickRelX",
@@ -268,7 +300,7 @@ class SettingsPage(QWidget):
             "chatgpt": (
                 "chatgpt_window_title",
                 "chatgpt_launch_command",
-                "ChatGPT",
+                "ChatGPT Classic",
                 None,
                 None,
                 "shortcutFocusRelX",
@@ -295,7 +327,7 @@ class SettingsPage(QWidget):
         }
 
         def get_current_target_fields():
-            current_target = target.currentText()
+            current_target = str(target.currentData())
             return target_app_fields.get(current_target, target_app_fields["codex"])
 
         (
@@ -405,11 +437,15 @@ class SettingsPage(QWidget):
             config_key: str,
             reader,
         ):
-            if target.currentText() == selected_target:
+            if target.currentData() == selected_target:
                 return reader()
             return get_nested(self._config, ("executor", config_key))
 
-        register(self._bindings, ("executor", "default_target"), target.currentText)
+        register(
+            self._bindings,
+            ("executor", "default_target"),
+            lambda: str(target.currentData()),
+        )
 
         for app_key, (title_key, launch_key, *_rest) in target_app_fields.items():
             register(
@@ -441,25 +477,15 @@ class SettingsPage(QWidget):
             self._bindings,
             ("executor", "composer_click_rel_x"),
             lambda: click_x.value()
-            if target.currentText() == "codex"
+            if target.currentData() == "codex"
             else get_nested(self._config, ("executor", "composer_click_rel_x")),
         )
         register(
             self._bindings,
             ("executor", "composer_click_rel_y"),
             lambda: click_y.value()
-            if target.currentText() == "codex"
+            if target.currentData() == "codex"
             else get_nested(self._config, ("executor", "composer_click_rel_y")),
-        )
-        register(
-            self._bindings,
-            ("executor", "cursor_composer_click_rel_x"),
-            lambda: get_nested(self._config, ("executor", "cursor_composer_click_rel_x")),
-        )
-        register(
-            self._bindings,
-            ("executor", "cursor_composer_click_rel_y"),
-            lambda: get_nested(self._config, ("executor", "cursor_composer_click_rel_y")),
         )
         content_layout.addWidget(frame)
 

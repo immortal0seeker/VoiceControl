@@ -22,7 +22,7 @@ It is a local desktop automation system, not a general chatbot.
 - Python 3.11+, using only the project `.venv`
 - Microphone
 - NVIDIA GPU optional; CPU fallback is supported
-- At least one target desktop app installed as needed: Codex Desktop, ChatGPT Desktop, Cursor, or Trae
+- At least one target desktop app installed as needed: ChatGPT (formerly Codex), ChatGPT Classic, Cursor, or Trae
 
 ## Installation
 
@@ -45,6 +45,15 @@ To enable SenseVoice-Small:
 .venv\Scripts\pip.exe install -e ".[sensevoice]"
 ```
 
+For SenseVoice on Windows with an NVIDIA GPU, install the CUDA 12.8 wheels verified by this project:
+
+```powershell
+.venv\Scripts\pip.exe install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+.venv\Scripts\pip.exe install --force-reinstall --no-deps torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+Verify with `.venv\Scripts\python.exe -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`; the final line must be `True`. If `stt.sensevoice_device = "cuda"` is configured but PyTorch cannot use CUDA, VoiceControl reports a clear error and stops that transcription instead of silently falling back to CPU.
+
 Resource boundaries:
 
 - If SenseVoice-Small is not installed or not selected, VoiceControl does not import FunASR/Torch/Torchaudio and adds no extra CPU, RAM, or VRAM load.
@@ -53,6 +62,7 @@ Resource boundaries:
 - In the local spike, the SenseVoice-Small model cache was about 896.5 MiB and the VAD model about 3.8 MiB. Torch/FunASR themselves are also large, so they remain optional.
 - With SenseVoice-Small selected, the model loads lazily on the first transcription. Idle listening does not run inference; CPU load is mainly a short burst during transcription.
 - The current implementation reuses the loaded model to keep later transcriptions fast, so it keeps some RAM resident. If long-running background memory pressure becomes visible, the next step should be an idle model-unload or per-transcription loading option.
+- RTX 4070 Laptop GPU measurement: CUDA 12.8 cold load+transcribe was about 27.55 seconds, warm transcription about 0.095 seconds, Python process RSS increased by about 1.62 GiB, and GPU VRAM increased by about 1140 MiB.
 
 ## Usage
 
@@ -144,10 +154,10 @@ The current config includes AppsFolder launch commands:
 
 Notes:
 
-- Codex Desktop, ChatGPT Desktop, Cursor, and Trae have been live-tested for opening, focusing/injecting text, and sending prompts.
-- ChatGPT Desktop and Cursor use `Ctrl+Shift+L` to focus the composer.
+- ChatGPT (compatibility key `codex`), ChatGPT Classic (compatibility key `chatgpt`), Cursor, and Trae have been live-tested for opening, focusing/injecting text, and sending prompts.
+- ChatGPT Classic and Cursor use `Ctrl+Shift+L` to focus the composer.
 - Trae uses a bottom neutral click to clear stale AI-sidebar focus, then `Ctrl+U` to focus the AI input, then paste/Enter. It does not click again after `Ctrl+U`.
-- Codex still uses relative composer click coordinates.
+- ChatGPT (formerly Codex) still uses relative composer click coordinates; window lookup prefers an exact title match so it does not select ChatGPT Classic.
 - If a target window is missing and its launch command is configured, the driver tries to start the app and waits for a matching window.
 
 ## Diagnostics
@@ -159,7 +169,7 @@ Notes:
 .venv\Scripts\python.exe -m voicecontrol.diagnostics.sensevoice_resource --audio audio_files\recordings\<sample>.wav --device cuda
 ```
 
-The control center also provides microphone, VAD, wake-word, STT model comparison, TTS, default-target send tests, and log viewing. STT comparison runs Whisper `small`, Whisper `medium`, and SenseVoice-Small; if the SenseVoice runtime is missing, it shows a per-model error while preserving Whisper results.
+The control center also provides microphone, VAD, wake-word, STT model comparison, TTS, default-target send tests, and log viewing. Long-running diagnostics execute on background threads so the settings window stays responsive. STT comparison runs Whisper `small`, Whisper `medium`, and SenseVoice-Small; if the SenseVoice runtime is missing, it shows a per-model error while preserving Whisper results.
 
 The SenseVoice resource diagnostic transcribes the same WAV twice and records provider/model/device, audio path, cold lazy-load+transcribe time, warm transcribe time, and Python process RSS before/after. If `nvidia-smi` is available, it also records GPU VRAM before/after; without `nvidia-smi`, the field is `null` and the diagnostic still completes. Missing FunASR/SenseVoice runtime is reported as a clear error with the optional-extra install command.
 
@@ -171,8 +181,8 @@ The SenseVoice resource diagnostic transcribes the same WAV twice and records pr
 | `wake_word.threshold` | `0.5` | Wake sensitivity |
 | `vad.silence_duration` | `3.0` | Trailing silence before recording stops |
 | `executor.default_target` | `cursor` | Default send target |
-| `executor.codex_window_title` | `Codex` | Codex window-title match |
-| `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT window-title match |
+| `executor.codex_window_title` | `ChatGPT` | ChatGPT (formerly Codex) window-title match |
+| `executor.chatgpt_window_title` | `ChatGPT Classic` | ChatGPT Classic window-title match |
 | `executor.cursor_window_title` | `Cursor` | Cursor window-title match |
 | `executor.trae_window_title` | `Trae` | Trae window-title match |
 | `stt.provider` | `faster_whisper` | STT provider: `faster_whisper` / `funasr_sensevoice` |
@@ -231,7 +241,7 @@ Shipped:
 - PySide6 control center
 - Windows SAPI status TTS
 - Runtime status snapshot
-- Command history and resend
+- Command history and resend; malformed JSONL rows are logged and skipped without hiding later valid records
 - Desktop pet status window
 - Diagnostics and logs pages
 

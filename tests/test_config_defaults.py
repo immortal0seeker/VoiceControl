@@ -70,7 +70,8 @@ class CheckedInConfigTests(unittest.TestCase):
             config["executor"]["codex_launch_command"],
             "explorer.exe shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App",
         )
-        self.assertEqual(config["executor"]["chatgpt_window_title"], "ChatGPT")
+        self.assertEqual(config["executor"]["codex_window_title"], "ChatGPT")
+        self.assertEqual(config["executor"]["chatgpt_window_title"], "ChatGPT Classic")
         self.assertEqual(
             config["executor"]["chatgpt_launch_command"],
             "explorer.exe shell:AppsFolder\\OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0!ChatGPT",
@@ -81,8 +82,8 @@ class CheckedInConfigTests(unittest.TestCase):
         self.assertEqual(config["executor"]["cursor_launch_command"], "explorer.exe shell:AppsFolder\\Anysphere.Cursor")
         self.assertEqual(config["executor"]["cursor_launch_timeout"], 15.0)
         self.assertEqual(config["executor"]["cursor_launch_poll_interval"], 0.5)
-        self.assertEqual(config["executor"]["cursor_composer_click_rel_x"], 0.83)
-        self.assertEqual(config["executor"]["cursor_composer_click_rel_y"], 0.97)
+        self.assertNotIn("cursor_composer_click_rel_x", config["executor"])
+        self.assertNotIn("cursor_composer_click_rel_y", config["executor"])
         self.assertEqual(config["executor"]["trae_launch_command"], "explorer.exe shell:AppsFolder\\ByteDance.TraeCN")
         self.assertNotIn("trae_composer_click_rel_x", config["executor"])
         self.assertNotIn("trae_composer_click_rel_y", config["executor"])

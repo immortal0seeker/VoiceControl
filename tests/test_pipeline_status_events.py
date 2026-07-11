@@ -57,7 +57,7 @@ class PipelineStatusEventTests(unittest.TestCase):
             language_probability=0.93,
         )
         driver = Mock()
-        driver.app_name = "Codex Desktop"
+        driver.app_name = "ChatGPT"
         orchestrator = VoiceOrchestrator(
             engine=engine,
             driver=driver,
@@ -87,7 +87,7 @@ class PipelineStatusEventTests(unittest.TestCase):
             language_probability=0.93,
         )
         driver = Mock()
-        driver.app_name = "Codex Desktop"
+        driver.app_name = "ChatGPT"
         driver.send_prompt.side_effect = WindowError("missing window")
         orchestrator = VoiceOrchestrator(
             engine=engine,

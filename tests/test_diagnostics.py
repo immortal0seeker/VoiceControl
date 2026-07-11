@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,7 +13,10 @@ import numpy as np
 from voicecontrol.diagnostics.logs import read_recent_log_lines
 from voicecontrol.diagnostics.microphone import run_microphone_test
 from voicecontrol.diagnostics.executor_send import run_executor_send_test
-from voicecontrol.diagnostics.sensevoice_resource import run_sensevoice_resource_benchmark
+from voicecontrol.diagnostics.sensevoice_resource import (
+    current_process_rss_bytes,
+    run_sensevoice_resource_benchmark,
+)
 from voicecontrol.diagnostics.stt_model_compare import run_stt_model_compare
 from voicecontrol.diagnostics.store import DiagnosticResult, append_diagnostic_result
 from voicecontrol.diagnostics.vad import run_vad_file_test
@@ -21,6 +25,13 @@ from voicecontrol.stt.engine import TranscriptionResult
 
 
 class DiagnosticsTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "Windows process memory API")
+    def test_current_process_rss_bytes_reports_positive_memory_on_windows(self) -> None:
+        rss_bytes = current_process_rss_bytes()
+
+        self.assertIsInstance(rss_bytes, int)
+        self.assertGreater(rss_bytes, 0)
+
     def test_read_recent_log_lines_returns_tail(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "voicecontrol.log"

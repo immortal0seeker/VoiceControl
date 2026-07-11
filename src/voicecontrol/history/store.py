@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from voicecontrol.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -89,11 +92,22 @@ def read_command_history(path: str | Path | None = None) -> list[CommandHistoryR
         return []
     records: list[CommandHistoryRecord] = []
     with history_path.open("r", encoding="utf-8") as file:
-        for line in file:
+        for line_number, line in enumerate(file, start=1):
             stripped = line.strip()
             if not stripped:
                 continue
-            records.append(CommandHistoryRecord.from_json_dict(json.loads(stripped)))
+            try:
+                data = json.loads(stripped)
+                if not isinstance(data, dict):
+                    raise TypeError("history record is not a JSON object")
+                records.append(CommandHistoryRecord.from_json_dict(data))
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "Skipping invalid command history line %d in %s: %s",
+                    line_number,
+                    history_path,
+                    exc,
+                )
     return records
 
 

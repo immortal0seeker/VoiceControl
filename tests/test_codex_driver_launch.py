@@ -35,6 +35,9 @@ class LaunchableAppDriverTests(unittest.TestCase):
 
 
 class CodexDriverLaunchTests(unittest.TestCase):
+    def test_driver_uses_renamed_chatgpt_display_name(self) -> None:
+        self.assertEqual(CodexDriver().app_name, "ChatGPT")
+
     def test_focus_launches_codex_when_window_is_missing(self) -> None:
         window = Window(hwnd=123, title="Codex")
         try:

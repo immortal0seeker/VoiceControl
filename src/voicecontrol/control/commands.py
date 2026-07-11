@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Literal
+from uuid import uuid4
 
 from voicecontrol.config import settings
 
@@ -21,6 +23,20 @@ CONTROL_COMMAND_PATH = settings.RUNTIME_DIR / "control_command.json"
 CONTROL_RESPONSE_PATH = settings.RUNTIME_DIR / "control_response.json"
 
 
+def _write_json_atomic(path: Path, payload: dict[str, object]) -> None:
+    """Publish a complete JSON document with an atomic same-directory replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        temp_path.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(temp_path, path)
+    finally:
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def write_control_command(
     command: ControlCommand,
     path: str | Path = CONTROL_COMMAND_PATH,
@@ -29,9 +45,8 @@ def write_control_command(
     if command not in VALID_COMMANDS:
         raise ValueError(f"Unsupported control command: {command}")
     command_path = Path(path)
-    command_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"command": command, "created_at": time.time()}
-    command_path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_json_atomic(command_path, payload)
     return command_path
 
 
@@ -41,16 +56,19 @@ def read_control_command(
 ) -> ControlCommand | None:
     """Read and consume one pending control command."""
     command_path = Path(path)
-    if not command_path.exists():
+    claimed_path = command_path.with_name(f".{command_path.name}.{uuid4().hex}.processing")
+    try:
+        os.replace(command_path, claimed_path)
+    except FileNotFoundError:
         return None
 
     try:
-        raw = json.loads(command_path.read_text(encoding="utf-8"))
+        raw = json.loads(claimed_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         raw = {}
     finally:
         try:
-            command_path.unlink()
+            claimed_path.unlink()
         except FileNotFoundError:
             pass
 
@@ -75,14 +93,13 @@ def write_control_response(
     if command not in VALID_COMMANDS:
         raise ValueError(f"Unsupported control command: {command}")
     response_path = Path(path)
-    response_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "command": command,
         "status": status,
         "message": message,
         "created_at": time.time(),
     }
-    response_path.write_text(json.dumps(payload), encoding="utf-8")
+    _write_json_atomic(response_path, payload)
     return response_path
 
 

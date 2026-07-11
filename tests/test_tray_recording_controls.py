@@ -137,6 +137,22 @@ class TrayRecordingControlTests(unittest.TestCase):
         self.assertTrue(app._paused.is_set())
         app._icon.update_menu.assert_called_once()
 
+    def test_control_worker_continues_after_control_file_error(self) -> None:
+        app = self._app()
+        app._paused = threading.Event()
+        app._stop_event = Mock()
+        app._stop_event.is_set.side_effect = [False, False, True]
+
+        with patch(
+            "voicecontrol.tray_app.read_control_command",
+            side_effect=[OSError("control file temporarily locked"), PAUSE_LISTENING],
+        ):
+            app._control_worker()
+
+        self.assertTrue(app._paused.is_set())
+        self.assertEqual(app._stop_event.wait.call_count, 2)
+        app._icon.update_menu.assert_called_once()
+
     def test_status_events_update_tray_recording_state_and_title(self) -> None:
         app = self._app()
         publisher = StatusPublisher()

@@ -4,7 +4,7 @@ Shared by the executor drivers. Uses the Win32 API via pywin32 for reliable
 window enumeration and foreground activation. No STT or recording logic here.
 
 Run as a script to list all visible top-level windows — useful for finding a
-target application's exact title (e.g. Codex Desktop).
+target application's exact title (e.g. ChatGPT Classic).
 """
 
 from __future__ import annotations
@@ -48,13 +48,17 @@ def list_windows() -> list[Window]:
 
 
 def find_window(title_substring: str) -> Window | None:
-    """Return the first visible window whose title contains ``title_substring``.
+    """Prefer an exact visible title, then fall back to a substring match.
 
     Matching is case-insensitive.
     """
-    needle = title_substring.lower()
-    for window in list_windows():
-        if needle in window.title.lower():
+    needle = title_substring.casefold()
+    windows = list_windows()
+    for window in windows:
+        if window.title.casefold() == needle:
+            return window
+    for window in windows:
+        if needle in window.title.casefold():
             return window
     return None
 

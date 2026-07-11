@@ -299,7 +299,11 @@ class TrayApp:
 
     def _control_worker(self) -> None:
         while not self._stop_event.is_set():
-            command = read_control_command()
+            try:
+                command = read_control_command()
+            except OSError:
+                logger.exception("Could not read the control command file; retrying.")
+                command = None
             if command in {START_RECORDING, STOP_RECORDING, PAUSE_LISTENING, RESUME_LISTENING, RELOAD_EXECUTOR}:
                 logger.info("Control command received: %s.", command)
                 self._handle_control_command(command)

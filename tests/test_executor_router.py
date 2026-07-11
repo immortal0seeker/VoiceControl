@@ -45,7 +45,7 @@ class ExecutorRouterTests(unittest.TestCase):
         self.assertEqual(driver.neutral_click_rel_y, 0.98)
         self.assertEqual(driver.ai_sidebar_shortcut, "ctrl+u")
 
-    def test_create_cursor_driver_from_config_ignores_cursor_composer_position(self) -> None:
+    def test_create_cursor_driver_from_config_uses_shortcut_focus_configuration(self) -> None:
         config = {
             "executor": {
                 "default_target": "cursor",
@@ -53,8 +53,6 @@ class ExecutorRouterTests(unittest.TestCase):
                 "cursor_launch_command": r"C:\Apps\Cursor\Cursor.exe",
                 "cursor_launch_timeout": 8.0,
                 "cursor_launch_poll_interval": 0.2,
-                "cursor_composer_click_rel_x": 0.83,
-                "cursor_composer_click_rel_y": 0.97,
             }
         }
 

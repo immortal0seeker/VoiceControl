@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
+import time
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +37,17 @@ from voicecontrol.ui.config_binding import set_nested
 from voicecontrol.ui.pages.logs_page import LogsPage
 from voicecontrol.ui.settings_window import SettingsWindow
 from voicecontrol.ui.style import apple_style_sheet
+
+
+def _process_events_until(predicate, timeout_seconds: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+        if predicate():
+            return True
+        time.sleep(0.01)
+    QApplication.processEvents()
+    return bool(predicate())
 
 
 class SettingsWindowNavigationTests(unittest.TestCase):
@@ -122,8 +135,15 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         target = window.findChild(QComboBox, "executorTargetCombo")
 
         self.assertIsNotNone(target)
-        self.assertEqual(target.currentText(), config["executor"]["default_target"])
-        self.assertEqual([target.itemText(index) for index in range(target.count())], ["codex", "chatgpt", "cursor", "trae"])
+        self.assertEqual(target.currentData(), config["executor"]["default_target"])
+        self.assertEqual(
+            [target.itemData(index) for index in range(target.count())],
+            ["codex", "chatgpt", "cursor", "trae"],
+        )
+        self.assertEqual(
+            [target.itemText(index) for index in range(target.count())],
+            ["ChatGPT", "ChatGPT Classic", "Cursor", "Trae"],
+        )
 
     def test_settings_page_hides_trae_click_strategy_controls(self) -> None:
         from PySide6.QtWidgets import QDoubleSpinBox
@@ -147,8 +167,6 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
         config = load_config()
         config["executor"]["default_target"] = "cursor"
-        config["executor"]["cursor_composer_click_rel_x"] = 0.83
-        config["executor"]["cursor_composer_click_rel_y"] = 0.97
         window = SettingsWindow(config)
 
         click_x = window.findChild(QDoubleSpinBox, "cursorComposerClickRelX")
@@ -252,6 +270,32 @@ class SettingsWindowNavigationTests(unittest.TestCase):
 
         self.assertIsNotNone(profile)
         self.assertEqual(profile.currentData(), "sensevoice_small")
+
+    def test_settings_page_binds_device_to_selected_stt_provider(self) -> None:
+        config = load_config()
+        config["stt"]["provider"] = "funasr_sensevoice"
+        config["stt"]["whisper_device"] = "cuda"
+        config["stt"]["sensevoice_device"] = "cpu"
+        window = SettingsWindow(config)
+
+        profile = window.findChild(QComboBox, "sttWhisperModelProfile")
+        device = window.findChild(QComboBox, "sttDevice")
+        settings_page = window.findChild(QWidget, "settingsPage")
+
+        self.assertIsNotNone(profile)
+        self.assertIsNotNone(device)
+        self.assertIsNotNone(settings_page)
+        self.assertEqual(device.currentText(), "cpu")
+
+        next_config = load_config()
+        for path, reader in settings_page._bindings:
+            set_nested(next_config, path, reader())
+
+        self.assertEqual(next_config["stt"]["sensevoice_device"], "cpu")
+        self.assertEqual(next_config["stt"]["whisper_device"], "cuda")
+
+        profile.setCurrentIndex(profile.findData("balanced_small"))
+        self.assertEqual(device.currentText(), "cuda")
 
     def test_settings_page_exposes_desktop_pet_controls(self) -> None:
         window = SettingsWindow(load_config())
@@ -603,13 +647,31 @@ class SettingsWindowNavigationTests(unittest.TestCase):
                 draft_button.click()
                 stt_compare_button.click()
 
+                self.assertTrue(
+                    _process_events_until(
+                        lambda: all(
+                            button.isEnabled()
+                            for button in (
+                                mic_button,
+                                vad_button,
+                                wake_button,
+                                codex_button,
+                                draft_button,
+                                stt_compare_button,
+                            )
+                        )
+                    )
+                )
+
             microphone.assert_called_once_with(diagnostic_path=diagnostic_path)
             vad.assert_called_once_with("sample_vad.wav", diagnostic_path=diagnostic_path)
             wake_word.assert_called_once_with("sample_wake.wav", diagnostic_path=diagnostic_path)
             speaker_class.return_value.speak.assert_called_once()
             self.assertEqual(executor_send.call_count, 2)
-            self.assertEqual(executor_send.call_args_list[0].kwargs["auto_enter"], True)
-            self.assertEqual(executor_send.call_args_list[1].kwargs["auto_enter"], False)
+            self.assertEqual(
+                {call.kwargs["auto_enter"] for call in executor_send.call_args_list},
+                {True, False},
+            )
             for call in executor_send.call_args_list:
                 self.assertEqual(call.kwargs["config"], window._config)
                 self.assertIsNone(call.kwargs["target"])
@@ -624,7 +686,12 @@ class SettingsWindowNavigationTests(unittest.TestCase):
             self.assertIn("max_score", wake_result.text())
             self.assertIn("TTS", tts_result.text())
             self.assertIn("ok", codex_result.text())
-            self.assertIn("auto_enter=False", codex_result.text())
+            self.assertTrue(
+                any(
+                    marker in codex_result.text()
+                    for marker in ("auto_enter=True", "auto_enter=False")
+                )
+            )
             self.assertIn("ok", stt_compare_result.text())
             self.assertIn("models", stt_compare_result.text())
 
@@ -636,6 +703,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         with patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone:
             microphone.return_value = DiagnosticResult(name="microphone", status="error", error="mic unavailable")
             mic_button.click()
+            self.assertTrue(_process_events_until(mic_button.isEnabled))
 
         self.assertIn("error", mic_result.text())
         self.assertIn("mic unavailable", mic_result.text())
@@ -644,18 +712,59 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         window = SettingsWindow(load_config())
         mic_button = window.findChild(QPushButton, "runMicrophoneDiagnosticButton")
         mic_result = window.findChild(QLabel, "microphoneDiagnosticResultLabel")
+        started = threading.Event()
+        release = threading.Event()
 
         def run_slow_diagnostic(*, diagnostic_path: Path | None = None) -> DiagnosticResult:
-            self.assertFalse(mic_button.isEnabled())
-            self.assertIn("运行中", mic_result.text())
+            started.set()
+            release.wait(timeout=2.0)
             return DiagnosticResult(name="microphone", status="ok")
 
         with patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone:
             microphone.side_effect = run_slow_diagnostic
             mic_button.click()
+            self.assertTrue(started.wait(timeout=1.0))
+            self.assertFalse(mic_button.isEnabled())
+            self.assertIn("运行中", mic_result.text())
+            release.set()
+            self.assertTrue(_process_events_until(mic_button.isEnabled))
 
         self.assertTrue(mic_button.isEnabled())
         self.assertIn("ok", mic_result.text())
+
+    def test_diagnostic_button_returns_while_service_runs_in_background(self) -> None:
+        window = SettingsWindow(load_config())
+        stt_button = window.findChild(QPushButton, "runSttModelCompareButton")
+        stt_result = window.findChild(QLabel, "sttModelCompareResultLabel")
+        started = threading.Event()
+        release = threading.Event()
+
+        def blocking_diagnostic(*, diagnostic_path: Path | None = None) -> DiagnosticResult:
+            started.set()
+            release.wait(timeout=2.0)
+            return DiagnosticResult(name="stt_model_compare", status="ok")
+
+        with patch(
+            "voicecontrol.ui.pages.diagnostics_page.run_stt_model_compare",
+            side_effect=blocking_diagnostic,
+        ):
+            click_started_at = time.perf_counter()
+            stt_button.click()
+            click_seconds = time.perf_counter() - click_started_at
+
+            self.assertTrue(started.wait(timeout=1.0))
+            self.assertLess(click_seconds, 0.5)
+            self.assertFalse(stt_button.isEnabled())
+            self.assertIn("运行中", stt_result.text())
+
+            release.set()
+            deadline = time.monotonic() + 2.0
+            while not stt_button.isEnabled() and time.monotonic() < deadline:
+                QApplication.processEvents()
+                time.sleep(0.01)
+
+        self.assertTrue(stt_button.isEnabled())
+        self.assertIn("ok", stt_result.text())
 
     def test_diagnostic_button_shows_service_exception(self) -> None:
         window = SettingsWindow(load_config())
@@ -665,6 +774,7 @@ class SettingsWindowNavigationTests(unittest.TestCase):
         with patch("voicecontrol.ui.pages.diagnostics_page.run_microphone_test") as microphone:
             microphone.side_effect = RuntimeError("mic unavailable")
             mic_button.click()
+            self.assertTrue(_process_events_until(mic_button.isEnabled))
 
         self.assertTrue(mic_button.isEnabled())
         self.assertIn("error", mic_result.text())

@@ -6,7 +6,7 @@ from collections.abc import Callable
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from voicecontrol.diagnostics.executor_send import run_executor_send_test
@@ -20,6 +20,30 @@ from voicecontrol.ui.pages.base import page_layout
 from voicecontrol.ui.widgets import card, line_edit
 
 logger = logging.getLogger(__name__)
+
+
+class _DiagnosticWorker(QObject):
+    """Run one diagnostic outside the GUI thread."""
+
+    completed = Signal(int, object, str)
+    finished = Signal()
+
+    def __init__(self, run_id: int, runner: Callable[[], DiagnosticResult]) -> None:
+        super().__init__()
+        self._run_id = run_id
+        self._runner = runner
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            result = self._runner()
+        except Exception as exc:
+            logger.debug("Diagnostic action failed.", exc_info=True)
+            self.completed.emit(self._run_id, None, str(exc))
+        else:
+            self.completed.emit(self._run_id, result, "")
+        finally:
+            self.finished.emit()
 
 
 def _make_selectable(label: QLabel) -> QLabel:
@@ -40,98 +64,6 @@ def _format_diagnostic_result(result: DiagnosticResult) -> str:
     return "：".join(parts)
 
 
-class MicrophoneDiagnosticsPage(QWidget):
-    """Records a short clip and checks input levels."""
-
-    def __init__(self, diagnostic_path: Path | None = None) -> None:
-        super().__init__()
-        self.setObjectName("microphoneDiagnosticsPage")
-        self._diagnostic_path = diagnostic_path
-
-        root_layout = page_layout(self, "麦克风诊断", "录制短音频并检查输入电平。")
-
-        run_button = QPushButton("开始测试")
-        run_button.setObjectName("runMicrophoneDiagnosticButton")
-        self._result_label = _make_selectable(QLabel("尚未运行。"))
-        self._result_label.setObjectName("microphoneDiagnosticResultLabel")
-        self._result_label.setWordWrap(True)
-        root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
-        root_layout.addWidget(self._result_label)
-        root_layout.addStretch(1)
-
-        run_button.clicked.connect(self._run)
-
-    def _run(self) -> None:
-        result = run_microphone_test(diagnostic_path=self._diagnostic_path)
-        self._result_label.setText(_format_diagnostic_result(result))
-
-
-class VadTestPage(QWidget):
-    """Selects a WAV file and checks VAD endpointing results."""
-
-    def __init__(self, diagnostic_path: Path | None = None) -> None:
-        super().__init__()
-        self.setObjectName("vadTestPage")
-        self._diagnostic_path = diagnostic_path
-
-        root_layout = page_layout(self, "VAD 测试", "选择 WAV 文件并检查端点检测结果。")
-
-        self._file_path = line_edit("", "WAV 文件路径")
-        self._file_path.setObjectName("vadTestFilePath")
-        run_button = QPushButton("运行 VAD 测试")
-        run_button.setObjectName("runVadTestButton")
-        self._result_label = _make_selectable(QLabel("尚未运行。"))
-        self._result_label.setObjectName("vadTestResultLabel")
-        self._result_label.setWordWrap(True)
-        root_layout.addWidget(self._file_path)
-        root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
-        root_layout.addWidget(self._result_label)
-        root_layout.addStretch(1)
-
-        run_button.clicked.connect(self._run)
-
-    def _run(self) -> None:
-        wav_path = self._file_path.text().strip()
-        if not wav_path:
-            self._result_label.setText("error：请先填写 WAV 文件路径。")
-            return
-        result = run_vad_file_test(wav_path, diagnostic_path=self._diagnostic_path)
-        self._result_label.setText(_format_diagnostic_result(result))
-
-
-class WakeWordTestPage(QWidget):
-    """Selects a WAV file and checks wake-word scores."""
-
-    def __init__(self, diagnostic_path: Path | None = None) -> None:
-        super().__init__()
-        self.setObjectName("wakeWordTestPage")
-        self._diagnostic_path = diagnostic_path
-
-        root_layout = page_layout(self, "唤醒词测试", "选择 WAV 文件并检查唤醒词得分。")
-
-        self._file_path = line_edit("", "WAV 文件路径")
-        self._file_path.setObjectName("wakeWordTestFilePath")
-        run_button = QPushButton("运行唤醒词测试")
-        run_button.setObjectName("runWakeWordTestButton")
-        self._result_label = _make_selectable(QLabel("尚未运行。"))
-        self._result_label.setObjectName("wakeWordTestResultLabel")
-        self._result_label.setWordWrap(True)
-        root_layout.addWidget(self._file_path)
-        root_layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
-        root_layout.addWidget(self._result_label)
-        root_layout.addStretch(1)
-
-        run_button.clicked.connect(self._run)
-
-    def _run(self) -> None:
-        wav_path = self._file_path.text().strip()
-        if not wav_path:
-            self._result_label.setText("error：请先填写 WAV 文件路径。")
-            return
-        result = run_wake_word_file_test(wav_path, diagnostic_path=self._diagnostic_path)
-        self._result_label.setText(_format_diagnostic_result(result))
-
-
 class DiagnosticsPage(QWidget):
     """Combined diagnostics page for microphone, VAD, and wake-word checks."""
 
@@ -140,6 +72,11 @@ class DiagnosticsPage(QWidget):
         self.setObjectName("diagnosticsPage")
         self._diagnostic_path = diagnostic_path
         self._config = config or {}
+        self._next_diagnostic_run_id = 0
+        self._diagnostic_runs: dict[
+            int,
+            tuple[QThread, _DiagnosticWorker, QPushButton, QLabel],
+        ] = {}
 
         root_layout = page_layout(self, "诊断", "集中运行麦克风、VAD 和唤醒词测试。")
         root_layout.setSpacing(16)
@@ -246,8 +183,10 @@ class DiagnosticsPage(QWidget):
         layout.addWidget(run_button, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self._codex_result_label)
         root_layout.addWidget(frame)
-        draft_button.clicked.connect(lambda: self._run_executor_send(auto_enter=False))
-        run_button.clicked.connect(lambda: self._run_executor_send(auto_enter=True))
+        draft_button.clicked.connect(
+            lambda: self._run_executor_send(draft_button, auto_enter=False)
+        )
+        run_button.clicked.connect(lambda: self._run_executor_send(run_button, auto_enter=True))
 
     def _run_microphone(self) -> None:
         self._run_diagnostic(
@@ -299,14 +238,17 @@ class DiagnosticsPage(QWidget):
             return
         self._tts_result_label.setText("TTS 测试已发送。")
 
-    def _run_executor_send(self, *, auto_enter: bool) -> None:
-        result = run_executor_send_test(
-            config=self._config,
-            target=None,
-            auto_enter=auto_enter,
-            diagnostic_path=self._diagnostic_path,
+    def _run_executor_send(self, button: QPushButton, *, auto_enter: bool) -> None:
+        self._run_diagnostic(
+            button,
+            self._codex_result_label,
+            lambda: run_executor_send_test(
+                config=self._config,
+                target=None,
+                auto_enter=auto_enter,
+                diagnostic_path=self._diagnostic_path,
+            ),
         )
-        self._codex_result_label.setText(_format_diagnostic_result(result))
 
     def _run_diagnostic(
         self,
@@ -316,11 +258,32 @@ class DiagnosticsPage(QWidget):
     ) -> None:
         button.setEnabled(False)
         result_label.setText("运行中…")
-        try:
-            result = runner()
+        self._next_diagnostic_run_id += 1
+        run_id = self._next_diagnostic_run_id
+        thread = QThread(self)
+        worker = _DiagnosticWorker(run_id, runner)
+        worker.moveToThread(thread)
+        worker.completed.connect(self._finish_diagnostic)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        self._diagnostic_runs[run_id] = (thread, worker, button, result_label)
+        thread.started.connect(worker.run)
+        thread.start()
+
+    @Slot(int, object, str)
+    def _finish_diagnostic(
+        self,
+        run_id: int,
+        result: DiagnosticResult | None,
+        error: str,
+    ) -> None:
+        run = self._diagnostic_runs.pop(run_id, None)
+        if run is None:
+            return
+        _thread, _worker, button, result_label = run
+        if error:
+            result_label.setText(f"error：{error}")
+        elif result is not None:
             result_label.setText(_format_diagnostic_result(result))
-        except Exception as exc:
-            logger.debug("Diagnostic action failed.", exc_info=True)
-            result_label.setText(f"error：{exc}")
-        finally:
-            button.setEnabled(True)
+        button.setEnabled(True)

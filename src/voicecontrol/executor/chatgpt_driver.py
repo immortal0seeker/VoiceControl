@@ -1,4 +1,4 @@
-"""ChatGPT Desktop driver."""
+"""ChatGPT Classic desktop driver."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class ChatGPTDriver(LaunchableAppDriver):
-    """Sends prompts to the ChatGPT Desktop window."""
+    """Sends prompts to the ChatGPT Classic window."""
 
-    app_name = "ChatGPT Desktop"
+    app_name = "ChatGPT Classic"
     COMPOSER_FOCUS_SHORTCUT = "ctrl+shift+l"
 
     def __init__(
@@ -35,9 +35,9 @@ class ChatGPTDriver(LaunchableAppDriver):
         )
 
     def _focus_composer(self, window: Window) -> None:
-        """Focus the ChatGPT composer with the desktop shortcut."""
+        """Focus the ChatGPT Classic composer with the desktop shortcut."""
         if settings.CLICK_COMPOSER_BEFORE_PASTE:
-            logger.info("Focusing ChatGPT composer with %s", self.COMPOSER_FOCUS_SHORTCUT)
+            logger.info("Focusing ChatGPT Classic composer with %s", self.COMPOSER_FOCUS_SHORTCUT)
             keyboard.send(self.COMPOSER_FOCUS_SHORTCUT)
             time.sleep(settings.CLICK_SETTLE_DELAY)
 

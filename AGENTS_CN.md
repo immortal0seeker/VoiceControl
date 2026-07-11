@@ -44,7 +44,7 @@ pip install -e .
 | 默认 STT 模型 | Whisper `small`；可选 Whisper `medium`、SenseVoice-Small |
 | 计算 | GPU 优先：`cuda` / `float16`；CPU 兜底：`int8` |
 | 用户配置 | 根目录 `config.json` 覆盖代码默认值；`config/manager.py` 合并；`settings.py` 导出 |
-| Executor 目标 | Codex Desktop、ChatGPT Desktop、Cursor、Trae |
+| Executor 目标 | ChatGPT（兼容键 `codex`）、ChatGPT Classic（兼容键 `chatgpt`）、Cursor、Trae |
 | Executor 设计 | 可插拔 `AppDriver`；复用 `LaunchableAppDriver`；由 `executor/router.py` 选择目标 |
 | VAD | faster-whisper 附带的 Silero VAD ONNX，通过 onnxruntime 使用 |
 | 唤醒词 | openWakeWord ONNX；内置 `hey_jarvis` 或自定义 `world_activate.onnx` |
@@ -148,8 +148,8 @@ VoiceControl/
 - `config/`：默认值和用户配置合并。
 - `control/`：文件式托盘 IPC 命令。
 - `events/`：状态 pub/sub 和 runtime 状态快照。
-- `history/`：追加式命令历史和重发。
-- `diagnostics/`：设置 UI 或 CLI 中的自测工具，包括 SenseVoice 资源基准；`nvidia-smi` 等可选工具缺失时应报告不可用，而不是让诊断失败。
+- `history/`：追加式命令历史和重发；读取时跳过并记录损坏的 JSONL 行，不能让单行损坏遮蔽后续有效历史。
+- `diagnostics/`：设置 UI 或 CLI 中的自测工具，包括 SenseVoice 资源基准；`nvidia-smi` 等可选工具缺失时应报告不可用，而不是让诊断失败；UI 发起的诊断必须离开 Qt GUI 线程运行。
 - `tts/`：Windows SAPI 状态短句。
 - `ui/`：PySide6 控制中心和桌宠；不放 pipeline 逻辑。
 - `utils/`：仅放无处归属的通用辅助。
@@ -179,7 +179,7 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` 当前包含 Codex、ChatGPT、Cursor、Trae 的 AppsFolder 启动命令。Codex Desktop、ChatGPT Desktop、Cursor、Trae 均已实测完成打开、聚焦/注入文本和发送闭环。
+`config.json` 当前包含 ChatGPT（原 Codex 包）、ChatGPT Classic、Cursor、Trae 的 AppsFolder 启动命令，四者均已实测完成打开、聚焦/注入文本和发送闭环。内部 `codex` / `chatgpt` 目标键为兼容已有配置而保留。
 
 STT 默认仍保持 `faster_whisper` + Whisper `small`。SenseVoice-Small 已通过 `stt.provider = "funasr_sensevoice"` 和设置 UI 接入，但 FunASR 运行时暂未加入默认安装依赖；缺少 SenseVoice 依赖时，诊断应给出清晰的单模型错误，同时保留 Whisper 对比结果。根目录 `config.json` 可作为本机用户配置启用 SenseVoice-Small + `cuda`；不要把 `DEFAULT_CONFIG` 从 `faster_whisper` + Whisper `small` 改掉。
 
@@ -207,9 +207,9 @@ class LaunchableAppDriver(AppDriver):
 - 默认目标通过 `voicecontrol.executor.router.get_default_driver()` 获取。
 - 显式目标通过 `create_driver("codex" | "chatgpt" | "cursor" | "trae")` 创建。
 - 优先用剪贴板粘贴，而不是逐字输入。
-- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
+- ChatGPT Classic 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
 - Trae 先点击底部中性区域让 AI 侧栏失焦，再用 `Ctrl+U` 聚焦 AI 输入框；`Ctrl+U` 后不要再点击输入框。
-- Codex 仍使用相对输入框点击坐标。
+- ChatGPT（原 Codex）仍使用相对输入框点击坐标；窗口查找必须先做不区分大小写的精确匹配，再做子串兜底。
 - 桌面操作前后保留短延迟和清晰日志。
 - 注意焦点丢失、输入法、管理员权限边界、编辑器热键截获。
 
@@ -251,7 +251,14 @@ SenseVoice-Small 运行时是可选依赖，必须保持在默认依赖之外：
 .venv\Scripts\pip.exe install -e ".[sensevoice]"
 ```
 
-`sensevoice` extra 包含 FunASR/ModelScope/Torch/Torchaudio。`DEFAULT_CONFIG` 默认保持 `stt.sensevoice_device = "cpu"`，避免长期托盘/监听默认占用 GPU 显存；用户根目录 `config.json` 可在安装 extra 后改为 `stt.sensevoice_device = "cuda"`。SenseVoice engine 必须保持懒加载；仅安装 extra 或启动托盘不应导入 Torch，只有选择 SenseVoice 并实际请求转写时才加载。
+Windows NVIDIA GPU 实测路径需要把通用 CPU wheel 替换为匹配的 CUDA 12.8 wheel：
+
+```powershell
+.venv\Scripts\pip.exe install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+.venv\Scripts\pip.exe install --force-reinstall --no-deps torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+`sensevoice` extra 包含 FunASR/ModelScope/Torch/Torchaudio。`DEFAULT_CONFIG` 默认保持 `stt.sensevoice_device = "cpu"`，避免长期托盘/监听默认占用 GPU 显存；用户根目录 `config.json` 可在安装 extra 和 CUDA 版 PyTorch 后改为 `stt.sensevoice_device = "cuda"`。SenseVoice engine 必须保持懒加载；仅安装 extra 或启动托盘不应导入 Torch，只有选择 SenseVoice 并实际请求转写时才加载。配置为 CUDA 但 `torch.cuda.is_available()` 为 false 时必须清晰报错并停止本次转写，禁止静默退回 CPU。
 
 打包资源：
 

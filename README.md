@@ -22,7 +22,7 @@ hey jarvis / world_activate -> 蜂鸣或 TTS「我在」
 - Python 3.11+，只使用项目 `.venv`
 - 麦克风
 - NVIDIA GPU 可选；无 GPU 时使用 CPU fallback
-- 目标桌面应用：Codex Desktop、ChatGPT Desktop、Cursor、Trae 至少按需安装其一
+- 目标桌面应用：ChatGPT（原 Codex）、ChatGPT Classic、Cursor、Trae 至少按需安装其一
 
 ## 安装
 
@@ -45,6 +45,15 @@ STT 默认使用 `faster_whisper` + Whisper `small`。设置页也提供 Whisper
 .venv\Scripts\pip.exe install -e ".[sensevoice]"
 ```
 
+如需在 Windows + NVIDIA GPU 上运行 SenseVoice，再安装项目已验证的 CUDA 12.8 wheel：
+
+```powershell
+.venv\Scripts\pip.exe install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+.venv\Scripts\pip.exe install --force-reinstall --no-deps torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+安装后用 `.venv\Scripts\python.exe -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"` 验证，最后一行必须是 `True`。如果配置为 `stt.sensevoice_device = "cuda"` 但 PyTorch 不支持 CUDA，VoiceControl 会明确报错并停止本次转写，不会静默退回 CPU。
+
 资源边界：
 
 - 未安装或未选择 SenseVoice-Small 时，不会导入 FunASR/Torch/Torchaudio，也不会占用额外 CPU、内存或显存。
@@ -53,6 +62,7 @@ STT 默认使用 `faster_whisper` + Whisper `small`。设置页也提供 Whisper
 - 本地 spike 中 SenseVoice-Small 模型缓存约 896.5 MiB，VAD 模型约 3.8 MiB；Torch/FunASR 依赖本身体积也较大，适合作为可选安装。
 - 选择 SenseVoice-Small 后，模型会在首次转写时懒加载；空闲监听阶段不做推理，CPU 主要在转写瞬间短时占用。
 - 当前实现会复用已加载模型以降低后续延迟，因此会保留一部分内存占用。若长期后台内存压力明显，下一步应增加“空闲释放模型”或“按次加载”开关。
+- RTX 4070 Laptop GPU 实测：CUDA 12.8 首次加载+转写约 27.55 秒，warm 转写约 0.095 秒，Python 进程 RSS 增加约 1.62 GiB，GPU 显存增加约 1140 MiB。
 
 ## 运行
 
@@ -144,10 +154,10 @@ trae
 
 说明：
 
-- Codex Desktop、ChatGPT Desktop、Cursor、Trae 已经实测可以成功打开、聚焦/注入文本并发送消息。
-- ChatGPT Desktop 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
+- ChatGPT（内部兼容键 `codex`）、ChatGPT Classic（内部兼容键 `chatgpt`）、Cursor、Trae 已经实测可以成功打开、聚焦/注入文本并发送消息。
+- ChatGPT Classic 和 Cursor 使用 `Ctrl+Shift+L` 聚焦输入区。
 - Trae 使用“底部中性区域点击失焦 -> `Ctrl+U` 聚焦 AI 输入框 -> 粘贴/回车”的策略；`Ctrl+U` 后不会再点击输入框。
-- Codex 当前仍使用相对位置点击输入框。
+- ChatGPT（原 Codex）当前仍使用相对位置点击输入框；窗口查找优先精确匹配，避免误选 ChatGPT Classic。
 - 如果窗口不存在且启动命令不为空，driver 会尝试启动应用并等待窗口出现。
 
 ## 诊断
@@ -159,7 +169,7 @@ trae
 .venv\Scripts\python.exe -m voicecontrol.diagnostics.sensevoice_resource --audio audio_files\recordings\<sample>.wav --device cuda
 ```
 
-控制中心也提供麦克风、VAD、唤醒词、STT 模型对比、TTS、默认目标发送测试和日志查看。STT 对比会比较 Whisper `small`、Whisper `medium` 和 SenseVoice-Small；如果 SenseVoice 运行时未安装，会显示单模型错误并保留 Whisper 结果。
+控制中心也提供麦克风、VAD、唤醒词、STT 模型对比、TTS、默认目标发送测试和日志查看。耗时诊断在后台线程运行，不阻塞设置窗口。STT 对比会比较 Whisper `small`、Whisper `medium` 和 SenseVoice-Small；如果 SenseVoice 运行时未安装，会显示单模型错误并保留 Whisper 结果。
 
 SenseVoice 资源诊断会用同一段 WAV 连续转写两次，记录 provider/model/device、音频路径、首次懒加载+转写耗时、warm 转写耗时、Python 进程 RSS 内存前后。如果系统有 `nvidia-smi`，还会记录 GPU 显存前后；没有 `nvidia-smi` 时该字段为 `null`，诊断不会因此失败。缺少 FunASR/SenseVoice 运行时时会写入清晰错误，并提示安装 optional extra。
 
@@ -171,8 +181,8 @@ SenseVoice 资源诊断会用同一段 WAV 连续转写两次，记录 provider/
 | `wake_word.threshold` | `0.5` | 唤醒灵敏度 |
 | `vad.silence_duration` | `3.0` | 说完后静音多久自动停录 |
 | `executor.default_target` | `cursor` | 默认发送目标 |
-| `executor.codex_window_title` | `Codex` | Codex 窗口标题匹配 |
-| `executor.chatgpt_window_title` | `ChatGPT` | ChatGPT 窗口标题匹配 |
+| `executor.codex_window_title` | `ChatGPT` | ChatGPT（原 Codex）窗口标题匹配 |
+| `executor.chatgpt_window_title` | `ChatGPT Classic` | ChatGPT Classic 窗口标题匹配 |
 | `executor.cursor_window_title` | `Cursor` | Cursor 窗口标题匹配 |
 | `stt.provider` | `faster_whisper` | STT provider，可选 `faster_whisper` / `funasr_sensevoice` |
 | `stt.whisper_model_size` | `small` | Whisper 档位，可选 `small` / `medium` |
@@ -224,13 +234,13 @@ logs/
 - SenseVoice 资源占用诊断：cold/warm 耗时、RSS、可选 `nvidia-smi` 显存
 - F9 热键录音与 VAD 自动停录
 - openWakeWord 唤醒词和托盘后台
-- Codex / ChatGPT / Cursor / Trae 桌面 driver，四目标发送闭环已实测
+- ChatGPT / ChatGPT Classic / Cursor / Trae 桌面 driver，四目标发送闭环已实测（内部目标键保持兼容）
 - 默认目标应用路由
 - AppsFolder 启动命令配置
 - PySide6 控制中心
 - Windows SAPI 状态 TTS
 - runtime 状态快照
-- 命令历史与重发
+- 命令历史与重发；损坏的 JSONL 行会记录警告并跳过，不影响后续有效记录
 - 桌宠状态窗口
 - 诊断页和日志页
 

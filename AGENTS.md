@@ -42,7 +42,7 @@ The editable install registers the `voicecontrol` package so `python -m voicecon
 | Default STT model | Whisper `small`; optional choices: Whisper `medium`, SenseVoice-Small |
 | Compute | GPU first: `device="cuda"`, `compute_type="float16"`; CPU fallback: `int8` |
 | User config | Root `config.json` merged over defaults via `config/manager.py`; `settings.py` exports merged values |
-| Executor targets | Codex Desktop, ChatGPT Desktop, Cursor, Trae |
+| Executor targets | ChatGPT (legacy key `codex`), ChatGPT Classic (legacy key `chatgpt`), Cursor, Trae |
 | Executor design | Pluggable `AppDriver`; reusable `LaunchableAppDriver`; `executor/router.py` selects the configured target |
 | VAD engine | Silero VAD ONNX bundled through faster-whisper / onnxruntime, no torch |
 | Wake word engine | openWakeWord ONNX; built-in `hey_jarvis` or bundled custom `world_activate.onnx` |
@@ -148,8 +148,8 @@ Module boundaries:
 - `config/` owns defaults and user override merging.
 - `control/` owns file-based tray IPC commands.
 - `events/` owns in-process status pub/sub and runtime status snapshots.
-- `history/` owns append-only command history and resend.
-- `diagnostics/` owns self-tests surfaced in the UI or CLI, including SenseVoice resource benchmarks. Missing optional tools such as `nvidia-smi` must be reported as unavailable rather than failing the diagnostic.
+- `history/` owns append-only command history and resend. Readers must skip and log malformed JSONL records so one damaged line does not hide later valid history.
+- `diagnostics/` owns self-tests surfaced in the UI or CLI, including SenseVoice resource benchmarks. Missing optional tools such as `nvidia-smi` must be reported as unavailable rather than failing the diagnostic. UI-triggered diagnostics must run off the Qt GUI thread.
 - `tts/` owns Windows SAPI status speech only.
 - `ui/` owns PySide6 control center and desktop pet. No pipeline logic.
 - `utils/` contains only cross-cutting helpers that fit nowhere else.
@@ -179,7 +179,7 @@ TTS_ENABLED = True
 RECORD_HOTKEY = "f9"
 ```
 
-`config.json` currently includes AppsFolder launch commands for Codex, ChatGPT, Cursor, and Trae. Codex Desktop, ChatGPT Desktop, Cursor, and Trae have all been live-tested for opening, focusing/injecting text, and sending prompts.
+`config.json` currently includes AppsFolder launch commands for ChatGPT (former Codex package), ChatGPT Classic, Cursor, and Trae. All four have been live-tested for opening, focusing/injecting text, and sending prompts. Keep the internal `codex` / `chatgpt` target keys for config compatibility.
 
 STT defaults remain on `faster_whisper` + Whisper `small`. SenseVoice-Small support exists behind `stt.provider = "funasr_sensevoice"` and the settings UI, but the FunASR runtime is not part of the default project install yet. Missing SenseVoice dependencies should fail clearly in diagnostics instead of breaking Whisper comparison results. The root `config.json` may be used as local user config for SenseVoice-Small + `cuda`; do not change `DEFAULT_CONFIG` away from `faster_whisper` + Whisper `small`.
 
@@ -207,9 +207,9 @@ Rules:
 - Route default target selection through `voicecontrol.executor.router.get_default_driver()`.
 - Use `create_driver("codex" | "chatgpt" | "cursor" | "trae")` for explicit target creation.
 - Prefer clipboard paste over character typing for Chinese and long prompts.
-- ChatGPT Desktop and Cursor focus their composer with `Ctrl+Shift+L`.
+- ChatGPT Classic and Cursor focus their composer with `Ctrl+Shift+L`.
 - Trae first clicks the bottom neutral area to remove stale AI-sidebar focus, then uses `Ctrl+U` to focus the AI input. Do not click again after `Ctrl+U`.
-- Codex still uses relative composer click coordinates.
+- ChatGPT (former Codex) still uses relative composer click coordinates. Window lookup must prefer exact case-insensitive matches before substring fallback.
 - Keep desktop actions logged and delayed slightly.
 - Be careful with focus loss, IME state, admin boundaries, and editor hotkeys.
 
@@ -251,7 +251,14 @@ SenseVoice-Small runtime is optional and must stay out of default dependencies:
 .venv\Scripts\pip.exe install -e ".[sensevoice]"
 ```
 
-The `sensevoice` extra contains FunASR/ModelScope/Torch/Torchaudio. Keep `stt.sensevoice_device = "cpu"` in `DEFAULT_CONFIG` so long-running tray/listener defaults do not consume GPU VRAM. A user's root `config.json` may opt into `stt.sensevoice_device = "cuda"` after installing the extra. The SenseVoice engine must remain lazy-loaded; installing the extra or running the tray must not import Torch unless SenseVoice is selected and a transcription is actually requested.
+For the tested Windows NVIDIA GPU path, replace the generic CPU wheels with matching CUDA 12.8 wheels:
+
+```powershell
+.venv\Scripts\pip.exe install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+.venv\Scripts\pip.exe install --force-reinstall --no-deps torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+The `sensevoice` extra contains FunASR/ModelScope/Torch/Torchaudio. Keep `stt.sensevoice_device = "cpu"` in `DEFAULT_CONFIG` so long-running tray/listener defaults do not consume GPU VRAM. A user's root `config.json` may opt into `stt.sensevoice_device = "cuda"` after installing the extra and a CUDA-enabled PyTorch wheel. The SenseVoice engine must remain lazy-loaded; installing the extra or running the tray must not import Torch unless SenseVoice is selected and a transcription is actually requested. A configured CUDA device must fail clearly when `torch.cuda.is_available()` is false; never silently fall back to CPU.
 
 Bundled package data:
 

@@ -1,4 +1,4 @@
-"""Codex Desktop driver — the first concrete AppDriver."""
+"""Driver for the former Codex Desktop app, now named ChatGPT."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class CodexDriver(LaunchableAppDriver):
-    """Sends prompts to the Codex Desktop window."""
+    """Sends prompts to the ChatGPT window backed by the Codex package."""
 
-    app_name = "Codex Desktop"
+    app_name = "ChatGPT"
 
     def __init__(
         self,

@@ -76,12 +76,12 @@ SENSEVOICE_LANGUAGE: str = "zh"
 # --- Executor / desktop automation -----------------------------------------
 # Substring (case-insensitive) used to locate the target app window.
 DEFAULT_EXECUTOR_TARGET: str = "codex"
-CODEX_WINDOW_TITLE: str = "Codex"
+CODEX_WINDOW_TITLE: str = "ChatGPT"
 # Optional executable path or launch command used when the Codex window is absent.
 CODEX_LAUNCH_COMMAND: str = ""
 CODEX_LAUNCH_TIMEOUT: float = 15.0
 CODEX_LAUNCH_POLL_INTERVAL: float = 0.5
-CHATGPT_WINDOW_TITLE: str = "ChatGPT"
+CHATGPT_WINDOW_TITLE: str = "ChatGPT Classic"
 CHATGPT_LAUNCH_COMMAND: str = ""
 CHATGPT_LAUNCH_TIMEOUT: float = 15.0
 CHATGPT_LAUNCH_POLL_INTERVAL: float = 0.5
@@ -89,8 +89,6 @@ CURSOR_WINDOW_TITLE: str = "Cursor"
 CURSOR_LAUNCH_COMMAND: str = "explorer.exe shell:AppsFolder\\Anysphere.Cursor"
 CURSOR_LAUNCH_TIMEOUT: float = 15.0
 CURSOR_LAUNCH_POLL_INTERVAL: float = 0.5
-CURSOR_COMPOSER_CLICK_REL_X: float = 0.83
-CURSOR_COMPOSER_CLICK_REL_Y: float = 0.97
 TRAE_WINDOW_TITLE: str = "Trae"
 TRAE_LAUNCH_COMMAND: str = ""
 TRAE_LAUNCH_TIMEOUT: float = 15.0
@@ -217,8 +215,6 @@ CURSOR_WINDOW_TITLE = _EXECUTOR_CONFIG["cursor_window_title"]
 CURSOR_LAUNCH_COMMAND = _EXECUTOR_CONFIG["cursor_launch_command"]
 CURSOR_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["cursor_launch_timeout"]
 CURSOR_LAUNCH_POLL_INTERVAL = _EXECUTOR_CONFIG["cursor_launch_poll_interval"]
-CURSOR_COMPOSER_CLICK_REL_X = _EXECUTOR_CONFIG["cursor_composer_click_rel_x"]
-CURSOR_COMPOSER_CLICK_REL_Y = _EXECUTOR_CONFIG["cursor_composer_click_rel_y"]
 TRAE_WINDOW_TITLE = _EXECUTOR_CONFIG["trae_window_title"]
 TRAE_LAUNCH_COMMAND = _EXECUTOR_CONFIG["trae_launch_command"]
 TRAE_LAUNCH_TIMEOUT = _EXECUTOR_CONFIG["trae_launch_timeout"]

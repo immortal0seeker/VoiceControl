@@ -132,10 +132,12 @@ def run_sensevoice_resource_benchmark(
 def current_process_rss_bytes() -> int | None:
     """Return current process RSS in bytes on Windows, or None if unavailable."""
     try:
+        from ctypes import wintypes
+
         class ProcessMemoryCounters(ctypes.Structure):
             _fields_ = [
-                ("cb", ctypes.c_ulong),
-                ("PageFaultCount", ctypes.c_ulong),
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
                 ("PeakWorkingSetSize", ctypes.c_size_t),
                 ("WorkingSetSize", ctypes.c_size_t),
                 ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
@@ -148,9 +150,18 @@ def current_process_rss_bytes() -> int | None:
 
         counters = ProcessMemoryCounters()
         counters.cb = ctypes.sizeof(ProcessMemoryCounters)
-        handle = ctypes.windll.kernel32.GetCurrentProcess()
-        ok = ctypes.windll.psapi.GetProcessMemoryInfo(
-            handle,
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel32.GetCurrentProcess.argtypes = []
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi.GetProcessMemoryInfo.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(ProcessMemoryCounters),
+            wintypes.DWORD,
+        ]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+        ok = psapi.GetProcessMemoryInfo(
+            kernel32.GetCurrentProcess(),
             ctypes.byref(counters),
             counters.cb,
         )

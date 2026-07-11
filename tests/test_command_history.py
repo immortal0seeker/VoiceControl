@@ -8,12 +8,34 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from voicecontrol.history.store import CommandHistoryRecord, append_command_history
+from voicecontrol.history.store import CommandHistoryRecord, append_command_history, read_command_history
 from voicecontrol.pipeline.orchestrator import VoiceOrchestrator
 from voicecontrol.stt.engine import TranscriptionResult
 
 
 class CommandHistoryStoreTests(unittest.TestCase):
+    def test_read_command_history_skips_malformed_lines_and_keeps_valid_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "history.jsonl"
+            first = CommandHistoryRecord(text="第一条", wav_path=Path("first.wav"), sent=True)
+            second = CommandHistoryRecord(text="第二条", wav_path=Path("second.wav"), sent=False)
+            path.write_text(
+                "\n".join(
+                    [
+                        json.dumps(first.to_json_dict(), ensure_ascii=False),
+                        '{"text":',
+                        json.dumps(second.to_json_dict(), ensure_ascii=False),
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertLogs("voicecontrol.history.store", level="WARNING") as captured:
+                records = read_command_history(path)
+
+        self.assertEqual([record.text for record in records], ["第一条", "第二条"])
+        self.assertIn("line 2", "\n".join(captured.output))
+
     def test_append_command_history_writes_json_line(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "history.jsonl"
@@ -70,7 +92,7 @@ class CommandHistoryStoreTests(unittest.TestCase):
             language_probability=0.93,
         )
         driver = Mock()
-        driver.app_name = "Codex Desktop"
+        driver.app_name = "ChatGPT"
         orchestrator = VoiceOrchestrator(engine=engine, driver=driver)
 
         with (
@@ -98,7 +120,7 @@ class CommandHistoryStoreTests(unittest.TestCase):
         engine = Mock()
         engine.transcribe_file.side_effect = RuntimeError("model failed")
         driver = Mock()
-        driver.app_name = "Codex Desktop"
+        driver.app_name = "ChatGPT"
         orchestrator = VoiceOrchestrator(engine=engine, driver=driver)
 
         with (

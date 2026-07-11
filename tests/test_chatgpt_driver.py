@@ -12,7 +12,7 @@ class ChatGPTDriverTests(unittest.TestCase):
     def test_defaults_come_from_settings(self) -> None:
         driver = ChatGPTDriver()
 
-        self.assertEqual(driver.app_name, "ChatGPT Desktop")
+        self.assertEqual(driver.app_name, "ChatGPT Classic")
         self.assertEqual(driver.window_title, settings.CHATGPT_WINDOW_TITLE)
         self.assertEqual(driver.launch_command, settings.CHATGPT_LAUNCH_COMMAND)
         self.assertEqual(driver.launch_timeout, settings.CHATGPT_LAUNCH_TIMEOUT)
